@@ -29,17 +29,23 @@ jobs:
 
       - name: Build APK with full logging
         id: build
-        # 使用 script 命令强制捕获所有终端输出
+        shell: bash
         run: |
-          # 1. 预先创建一个空的 build.log 文件，确保后续上传步骤不会失败
+          # 1. 预先创建空的 build.log 文件
           touch build.log
-          
-          # 2. 使用 script 命令将整个构建过程的输出写入 build.log
-          #    -q: 安静模式, -e: 返回被运行命令的退出码, -c: 要运行的命令
-          script -q -e -c "flutter build apk --release --split-per-abi -v" build.log
-          
-          # 3. 检查构建是否成功并生成摘要
-          if [ $? -eq 0 ] && [ -d "build/app/outputs/apk/release" ]; then
+
+          # 2. 在子 shell 中执行构建，同时捕获 stdout 和 stderr 到 build.log
+          #    set -x 会打印每条执行的命令，方便调试
+          {
+            set -x
+            flutter build apk --release --split-per-abi -v
+          } 2>&1 | tee -a build.log
+
+          # 3. 保存退出码（管道中 tee 会吃掉退出码，需要用 PIPESTATUS）
+          EXIT_CODE=${PIPESTATUS[0]}
+
+          # 4. 检查构建是否成功并生成摘要
+          if [ $EXIT_CODE -eq 0 ] && [ -d "build/app/outputs/apk/release" ]; then
             echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
@@ -53,13 +59,13 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/apk/release/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
-            echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
+            echo "## ❌ 构建失败 (退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### 完整构建日志：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             cat build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            exit 1
+            exit $EXIT_CODE
           fi
 
       - name: Upload APKs
@@ -69,10 +75,10 @@ jobs:
           name: pho-apk
           path: build/app/outputs/apk/release/*.apk
 
-      # 无论成败都上传日志
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v5
         with:
           name: build-log
           path: build.log
+          if-no-files-found: warn
