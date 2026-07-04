@@ -39,7 +39,7 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write final Gradle files
+      - name: Write Gradle files (AndroidX & Kotlin 1.8.20)
         run: |
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
@@ -164,31 +164,36 @@ jobs:
           }
           EOF
 
-          echo "✅ 最终 Gradle 配置已写入"
+          echo "✅ Gradle 文件已配置"
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK via Gradle
+      - name: Build APK using Flutter
         id: build
         run: |
-          cd android
-          ./gradlew assembleRelease --stacktrace
-          cd ..
+          flutter build apk --release --split-per-abi
+          if [ $? -eq 0 ]; then
+            echo "✅ flutter build apk 成功"
+          else
+            echo "❌ flutter build apk 失败"
+            exit 1
+          fi
 
       - name: Copy APK
         if: success()
         run: |
           echo "查找 APK 文件..."
-          ls -R android/app/build/outputs/apk/ || echo "目录不存在"
-          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" 2>/dev/null | head -n 1)
+          # 检查 flutter 默认输出路径
+          APK_PATH=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
           if [ -n "$APK_PATH" ]; then
             echo "找到 APK: $APK_PATH"
             mkdir -p build/app/outputs/flutter-apk
             cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
             echo "apk_found=true" >> $GITHUB_OUTPUT
           else
-            echo "❌ 未找到 APK 文件"
+            echo "❌ 未找到 APK，列出目录内容："
+            ls -R build/app/outputs/apk/ || echo "目录不存在"
             exit 1
           fi
 
