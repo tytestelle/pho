@@ -26,45 +26,31 @@ jobs:
 
       - name: Clean and backup project
         run: |
-          # 备份关键源码和资源（避免 flutter create 覆盖）
           if [ -d "lib" ]; then cp -r lib lib_backup; fi
           if [ -d "assets" ]; then cp -r assets assets_backup; fi
           if [ -f "pubspec.yaml" ]; then cp pubspec.yaml pubspec.yaml.backup; fi
-          echo "已备份 lib、assets 和 pubspec.yaml"
 
       - name: Force regenerate Android platform
         run: |
-          # 删除现有 android 目录（如果存在）
           rm -rf android
-          # 重新生成完整的 Flutter 项目（包含所有平台）
           flutter create .
-          # 恢复备份的源码和资源
           if [ -d "lib_backup" ]; then rm -rf lib && cp -r lib_backup lib; fi
           if [ -d "assets_backup" ]; then rm -rf assets && cp -r assets_backup assets; fi
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
-          echo "已恢复源码和资源"
-          echo "检查 android 目录："
+          chmod +x android/gradlew
           ls -la android/
 
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
-
       - name: Install dependencies
-        run: |
-          for i in {1..3}; do
-            flutter pub get && break || sleep 5
-          done
+        run: flutter pub get
 
       - name: Build APK with full logging
         id: build
         run: |
-          # 使用 script 命令强制捕获所有输出到 build.log
-          # -q 静默，-e 返回被运行命令的退出码，-c 要运行的命令
-          script -q -e -c "flutter build apk --release --split-per-abi -v" build.log
+          set -o pipefail
+          flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
           EXIT_CODE=$?
           echo "构建退出码: $EXIT_CODE"
-
-          # 生成构建摘要
+          # 生成摘要
           echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
@@ -74,19 +60,16 @@ jobs:
           echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-
-          # 检查 APK 是否生成
-          APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
-          if [ $APK_FOUND -gt 0 ]; then
+          if [ -d "build/app/outputs/apk/release" ] && [ "$(ls -A build/app/outputs/apk/release/*.apk 2>/dev/null)" ]; then
             echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/apk/release/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ 构建失败 (退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 完整构建日志：" >> $GITHUB_STEP_SUMMARY
+            echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            cat build.log >> $GITHUB_STEP_SUMMARY
+            tail -200 build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit $EXIT_CODE
           fi
