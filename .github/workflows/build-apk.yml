@@ -27,34 +27,32 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
-      - name: Build APK with full logging
+      - name: Build APK and capture all output
         id: build
-        shell: bash
         run: |
-          # 1. 预先创建空的 build.log 文件
-          touch build.log
-
-          # 2. 在子 shell 中执行构建，同时捕获 stdout 和 stderr 到 build.log
-          #    set -x 会打印每条执行的命令，方便调试
-          {
-            set -x
-            flutter build apk --release --split-per-abi -v
-          } 2>&1 | tee -a build.log
-
-          # 3. 保存退出码（管道中 tee 会吃掉退出码，需要用 PIPESTATUS）
-          EXIT_CODE=${PIPESTATUS[0]}
-
-          # 4. 检查构建是否成功并生成摘要
-          if [ $EXIT_CODE -eq 0 ] && [ -d "build/app/outputs/apk/release" ]; then
-            echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
-            echo "|------|----|" >> $GITHUB_STEP_SUMMARY
-            echo "| 分支 | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| 提交 | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
-            echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+          # 使用 stdbuf 强制禁用输出缓冲，确保所有日志都被捕获
+          # 将 stdout 和 stderr 都重定向到 build.log
+          stdbuf -oL -eL flutter build apk --release --split-per-abi -v > build.log 2>&1
+          
+          # 保存命令的退出码
+          EXIT_CODE=$?
+          
+          # 使用 find 命令查找生成的 APK，判断构建是否真正成功
+          APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
+          
+          # 生成摘要
+          echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|----|" >> $GITHUB_STEP_SUMMARY
+          echo "| 分支 | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 提交 | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # 根据 APK 是否生成来判断构建是否成功
+          if [ $APK_FOUND -gt 0 ]; then
             echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/apk/release/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
