@@ -1,4 +1,3 @@
-// 使用声明式插件管理
 pluginManagement {
     def flutterSdkPath = {
         def properties = new Properties()
