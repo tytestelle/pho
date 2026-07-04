@@ -24,42 +24,54 @@ jobs:
         with:
           flutter-version: '3.27.0'
 
-      # 强制重新生成完整的 Android 目录
+      # 强制重新生成 Android 目录（确保完整）
       - name: Force regenerate Android platform
         run: |
-          # 备份源码和资源
           if [ -d "lib" ]; then cp -r lib lib_backup; fi
           if [ -d "assets" ]; then cp -r assets assets_backup; fi
           if [ -f "pubspec.yaml" ]; then cp pubspec.yaml pubspec.yaml.backup; fi
 
-          # 删除可能损坏的 android 目录，重新生成
           rm -rf android
           flutter create .
 
-          # 恢复备份的源码和资源
           if [ -d "lib_backup" ]; then rm -rf lib && cp -r lib_backup lib; fi
           if [ -d "assets_backup" ]; then rm -rf assets && cp -r assets_backup assets; fi
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
 
           chmod +x android/gradlew
-          echo "✅ android 目录已重新生成"
 
       - name: Install dependencies
         run: flutter pub get
 
-      # 关键：直接使用 Gradle 构建，绕过 Flutter CLI 的 APK 查找逻辑
-      - name: Build APK via Gradle directly
+      # 🔧 修复第三方插件的 namespace 问题
+      - name: Fix plugin namespace
+        run: |
+          # 找到 flutter_image_compress_common 插件的 build.gradle
+          PLUGIN_DIR=$(find . -path "*/flutter_image_compress_common/android/build.gradle" 2>/dev/null | head -n 1)
+          if [ -n "$PLUGIN_DIR" ]; then
+            echo "✅ 找到插件: $PLUGIN_DIR"
+            # 检查是否已有 namespace，如果没有则添加
+            if ! grep -q "namespace" "$PLUGIN_DIR"; then
+              echo "⚠️ 正在添加 namespace..."
+              # 在 android { 块内添加 namespace
+              sed -i '/android {/a \    namespace "com.example.plugin"' "$PLUGIN_DIR"
+              echo "✅ namespace 已添加"
+            else
+              echo "✅ namespace 已存在"
+            fi
+          else
+            echo "⚠️ 未找到 flutter_image_compress_common 插件，跳过修复"
+          fi
+
+      # 直接使用 Gradle 构建
+      - name: Build APK via Gradle
         id: build
         run: |
-          # 1. 直接进入 android 目录，用 gradlew 构建
           cd android
           ./gradlew assembleRelease --stacktrace
           cd ..
 
-          # 2. 在 Gradle 构建的产物目录中查找 APK
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
-
-          # 3. 如果找到了 APK，复制到 Flutter CLI 期望的路径，并设置输出变量
           if [ -n "$APK_PATH" ]; then
             echo "✅ 找到 APK: $APK_PATH"
             mkdir -p build/app/outputs/flutter-apk
