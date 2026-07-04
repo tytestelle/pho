@@ -22,7 +22,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.0'   # 升级到最新稳定版
+          flutter-version: '3.29.0'
 
       - name: Clean and backup
         run: |
@@ -39,13 +39,13 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write Gradle files (AGP 8.1.0, Kotlin 1.9.24, Gradle 8.4)
+      - name: Write stable Gradle files (AGP 7.2.0, Kotlin 1.8.20, Gradle 7.5)
         run: |
           # gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
+          distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-all.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
@@ -53,13 +53,13 @@ jobs:
           # build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
-              ext.kotlin_version = '1.9.24'
+              ext.kotlin_version = '1.8.20'
               repositories {
                   google()
                   mavenCentral()
               }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:8.1.0'
+                  classpath 'com.android.tools.build:gradle:7.2.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
@@ -101,8 +101,8 @@ jobs:
           }
           plugins {
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "8.1.0" apply false
-              id "org.jetbrains.kotlin.android" version "1.9.24" apply false
+              id "com.android.application" version "7.2.0" apply false
+              id "org.jetbrains.kotlin.android" version "1.8.20" apply false
           }
           include ":app"
           EOF
@@ -131,14 +131,14 @@ jobs:
           }
           android {
               namespace "com.example.pho"
-              compileSdk 34
+              compileSdk 33
               compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_17
-                  targetCompatibility JavaVersion.VERSION_17
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
               }
               kotlinOptions {
                   languageVersion = '1.8'
-                  jvmTarget = '17'
+                  jvmTarget = '11'
               }
               sourceSets {
                   main.java.srcDirs += 'src/main/kotlin'
@@ -146,7 +146,7 @@ jobs:
               defaultConfig {
                   applicationId "com.example.pho"
                   minSdkVersion 21
-                  targetSdkVersion 34
+                  targetSdkVersion 33
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
@@ -161,7 +161,7 @@ jobs:
           }
           EOF
 
-          echo "✅ Gradle 文件已更新 (AGP 8.1.0, Kotlin 1.9.24, Gradle 8.4)"
+          echo "✅ Gradle 文件已配置 (AGP 7.2.0, Kotlin 1.8.20, Gradle 7.5)"
 
       - name: Install dependencies
         run: flutter pub get
@@ -173,7 +173,7 @@ jobs:
           ./gradlew assembleRelease --stacktrace
           cd ..
 
-      - name: Copy APK
+      - name: Copy APK to expected location
         if: success()
         run: |
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
