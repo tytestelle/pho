@@ -5,35 +5,35 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-  workflow_dispatch:
+  workflow_dispatch:   # 允许手动触发
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-      # 1. 升级到 v5 以消除 Node.js 警告
+      # 1. 检出代码（升级到 v5 消除 Node.js 警告）
       - uses: actions/checkout@v5
 
+      # 2. 设置 Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.x'
 
-      # 2. 清理缓存，避免潜在的构建问题
+      # 3. 清理项目（避免缓存污染）
       - name: Clean project
         run: flutter clean
 
-      # 3. 安装依赖，增加重试机制
+      # 4. 安装依赖（带重试机制）
       - name: Install dependencies
         run: |
           for i in {1..3}; do
             flutter pub get && break || sleep 5
           done
 
-      # 4. 构建 APK，并生成详细日志 (使用 -v 参数)
-      - name: Build APK with summary
+      # 5. 构建 APK（关键：不使用 continue-on-error，确保失败即停止）
+      - name: Build APK
         id: build
-        continue-on-error: true  # 允许后续步骤继续执行，以便上传日志
         run: |
           # 写入构建摘要头部
           echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
@@ -46,29 +46,25 @@ jobs:
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # 执行构建，同时将输出保存到 build.log
+          # 执行构建，输出同时保存到 build.log
           flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
 
-          # 如果构建成功，列出 APK 文件
-          if [ $? -eq 0 ]; then
-            echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            ls -lh build/app/outputs/apk/release/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
-          fi
-
-      # 5. 构建失败时，在摘要中显示错误日志
-      - name: Show build errors on failure
-        if: steps.build.outcome == 'failure'
-        run: |
-          echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
+          # 如果构建成功，列出 APK 文件并追加到摘要
+          echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 最后 50 行错误日志：" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -50 build.log >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          exit 1
+          ls -lh build/app/outputs/apk/release/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
 
-      # 6. 上传 APK (升级到 v5)
+      # 6. 构建失败时显示错误日志（此步骤只有在构建失败时才执行）
+      - name: Show build errors on failure
+        if: failure()
+        run: |
+          echo "## ❌ 构建失败，错误详情：" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -100 build.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      # 7. 上传 APK（只有构建成功时才上传）
       - name: Upload APKs
         if: success()
         uses: actions/upload-artifact@v5
@@ -76,10 +72,9 @@ jobs:
           name: pho-apk
           path: build/app/outputs/apk/release/*.apk
 
-      # 7. 上传构建日志 (无论成功失败都上传，并增加容错)
+      # 8. 上传构建日志（无论成败，方便排查问题）
       - name: Upload build log
         if: always()
-        continue-on-error: true  # 即使找不到文件也不中断流程
         uses: actions/upload-artifact@v5
         with:
           name: build-log
