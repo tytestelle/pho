@@ -1,5 +1,5 @@
 buildscript {
-    ext.kotlin_version = '1.7.10'
+    ext.kotlin_version = '1.9.24'   // 升级到 1.9.24，兼容 Gradle 7.6.3[reference:3]
     repositories {
         google()
         mavenCentral()
