@@ -26,18 +26,22 @@ jobs:
 
       - name: Clean and backup project
         run: |
+          # 备份源码和资源，避免 flutter create 覆盖
           if [ -d "lib" ]; then cp -r lib lib_backup; fi
           if [ -d "assets" ]; then cp -r assets assets_backup; fi
           if [ -f "pubspec.yaml" ]; then cp pubspec.yaml pubspec.yaml.backup; fi
 
       - name: Force regenerate Android platform
         run: |
+          # 删除可能损坏的 android 目录，重新生成
           rm -rf android
           flutter create .
+          # 恢复备份的源码和资源
           if [ -d "lib_backup" ]; then rm -rf lib && cp -r lib_backup lib; fi
           if [ -d "assets_backup" ]; then rm -rf assets && cp -r assets_backup assets; fi
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
+          echo "✅ android 目录已重新生成，gradlew 已可执行"
           ls -la android/
 
       - name: Install dependencies
@@ -46,11 +50,16 @@ jobs:
       - name: Build APK with full logging
         id: build
         run: |
+          # 确保 build.log 文件存在（即使 tee 没有输入也会创建空文件）
+          touch build.log
+          # 设置 pipefail，确保管道中第一个命令的退出码被保留
           set -o pipefail
+          # 执行构建，stdout 和 stderr 同时输出到控制台和 build.log
           flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
           EXIT_CODE=$?
           echo "构建退出码: $EXIT_CODE"
-          # 生成摘要
+
+          # 生成构建摘要
           echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
@@ -60,6 +69,8 @@ jobs:
           echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # 检查 APK 是否生成
           if [ -d "build/app/outputs/apk/release" ] && [ "$(ls -A build/app/outputs/apk/release/*.apk 2>/dev/null)" ]; then
             echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
