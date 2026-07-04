@@ -161,7 +161,7 @@ jobs:
           }
           EOF
 
-          echo "✅ Gradle 文件已配置 (AGP 7.2.0, Kotlin 1.8.20, Gradle 7.5)"
+          echo "✅ Gradle 文件已配置"
 
       - name: Install dependencies
         run: flutter pub get
