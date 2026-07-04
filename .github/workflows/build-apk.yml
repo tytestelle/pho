@@ -22,117 +22,181 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.16.9'
+          flutter-version: '3.19.6'
 
-      - name: Overwrite pubspec.yaml with correct content
+      - name: Clean and backup
         run: |
-          cat > pubspec.yaml <<'EOF'
-          name: pho
-          description: A new Flutter project.
-          publish_to: 'none'
-          version: 1.3.4+18
+          if [ -d "lib" ]; then cp -r lib lib_backup; fi
+          if [ -d "assets" ]; then cp -r assets assets_backup; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml pubspec.yaml.backup; fi
 
-          environment:
-            sdk: ">=3.0.0 <4.0.0"
+      - name: Regenerate Android platform
+        run: |
+          rm -rf android
+          flutter create --platforms=android .
+          if [ -d "lib_backup" ]; then rm -rf lib && cp -r lib_backup lib; fi
+          if [ -d "assets_backup" ]; then rm -rf assets && cp -r assets_backup assets; fi
+          if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
+          chmod +x android/gradlew
 
-          dependencies:
-            flutter:
-              sdk: flutter
+      - name: Write Gradle files and delete .kts conflicts
+        run: |
+          # 删除可能冲突的 .kts 文件
+          rm -f android/settings.gradle.kts android/build.gradle.kts android/app/build.gradle.kts
+          rm -f android/gradle.properties
 
-            cupertino_icons: ^1.0.2
-            photo_album_manager: ^1.2.0
-            toast: ^0.3.0
-            grpc: ^3.1.0
-            photo_manager: ^2.8.2
-            photo_view: ^0.14.0
-            date_format: ^2.0.7
-            image_picker: ^1.0.0
-            provider: ^6.0.5
-            path: ^1.8.2
-            shared_preferences: ^2.0.18
-            event_bus: ^2.0.0
-            exif: ^3.1.4
-            adaptive_theme: ^3.2.0
-            dynamic_color: ^1.6.2
-            synchronized: ^3.0.1
-            rxdart: ^0.27.7
-            image: ^4.0.17
-            share_plus: ^7.0.2
-            logger: ^1.3.0
-            connectivity_plus: ^4.0.1
-            flutter_launcher_icons: ^0.13.1
-            extended_image: ^8.0.2
-            flutter_localizations:
-              sdk: flutter
-            chewie: ^1.7.0
-            path_provider: ^2.0.15
-            mime: ^1.0.4
-            url_launcher: ^6.1.11
-            flutter_image_compress: ^2.0.3
-            gallery_saver: ^2.3.2
-            vibration: ^3.1.8
-
-          dependency_overrides:
-            win32: ^5.0.0
-            flutter_plugin_android_lifecycle: 2.0.19
-
-          dev_dependencies:
-            flutter_test:
-              sdk: flutter
-            flutter_lints: ^2.0.0
-
-          flutter:
-            uses-material-design: true
-            generate: true
-            assets:
-              - assets/images/broken.png
-              - assets/images/gray.jpg
-              - assets/icon/pho_icon.png
-            fonts:
-              - family: Ubuntu
-                fonts:
-                  - asset: assets/fonts/Ubuntu-M.ttf
-              - family: Ubuntu-thin
-                fonts:
-                  - asset: assets/fonts/Ubuntu-Th.ttf
-              - family: Ubuntu-condensed
-                fonts:
-                  - asset: assets/fonts/Ubuntu-C.ttf
-
-          flutter_icons:
-            android: "launcher_icon"
-            ios: true
-            image_path: "assets/icon/pho_icon.png"
+          # gradle-wrapper.properties
+          cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-all.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
           EOF
-          echo "✅ pubspec.yaml 已覆盖为正确内容"
+
+          cat > android/gradle.properties <<'EOF'
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.suppressUnsupportedCompileSdk=34
+          org.gradle.jvmargs=-Xmx1536M
+          EOF
+
+          cat > android/build.gradle <<'EOF'
+          buildscript {
+              ext.kotlin_version = '1.8.20'
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:7.2.0'
+                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+              }
+          }
+          allprojects {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.buildDir = '../build'
+          subprojects {
+              project.buildDir = "${rootProject.buildDir}/${project.name}"
+          }
+          subprojects {
+              project.evaluationDependsOn(':app')
+          }
+          tasks.register('clean', Delete) {
+              delete rootProject.buildDir
+          }
+          EOF
+
+          cat > android/settings.gradle <<'EOF'
+          pluginManagement {
+              def flutterSdkPath = {
+                  def properties = new Properties()
+                  file("local.properties").withInputStream { properties.load(it) }
+                  def flutterSdkPath = properties.getProperty("flutter.sdk")
+                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
+                  return flutterSdkPath
+              }
+              settings.ext.flutterSdkPath = flutterSdkPath()
+              includeBuild("${settings.ext.flutterSdkPath}/packages/flutter_tools/gradle")
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          plugins {
+              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+              id "com.android.application" version "7.2.0" apply false
+              id "org.jetbrains.kotlin.android" version "1.8.20" apply false
+          }
+          include ":app"
+          EOF
+
+          cat > android/app/build.gradle <<'EOF'
+          plugins {
+              id "com.android.application"
+              id "kotlin-android"
+              id "dev.flutter.flutter-gradle-plugin"
+          }
+          def localProperties = new Properties()
+          def localPropertiesFile = rootProject.file('local.properties')
+          if (localPropertiesFile.exists()) {
+              localPropertiesFile.withReader('UTF-8') { reader ->
+                  localProperties.load(reader)
+              }
+          }
+          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+          if (flutterVersionCode == null) {
+              flutterVersionCode = '1'
+          }
+          def flutterVersionName = localProperties.getProperty('flutter.versionName')
+          if (flutterVersionName == null) {
+              flutterVersionName = '1.0'
+          }
+          android {
+              namespace "com.example.pho"
+              compileSdk 34
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_11
+                  targetCompatibility JavaVersion.VERSION_11
+              }
+              kotlinOptions {
+                  languageVersion = '1.8'
+                  jvmTarget = '11'
+              }
+              sourceSets {
+                  main.java.srcDirs += 'src/main/kotlin'
+              }
+              defaultConfig {
+                  applicationId "com.example.pho"
+                  minSdkVersion 21
+                  targetSdkVersion 34
+                  versionCode flutterVersionCode.toInteger()
+                  versionName flutterVersionName
+              }
+              buildTypes {
+                  release {
+                      signingConfig signingConfigs.debug
+                  }
+              }
+          }
+          flutter {
+              source '../..'
+          }
+          EOF
+
+          echo "✅ Gradle 文件已写入（已清理 .kts 冲突）"
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Clean build
-        run: flutter clean
-
-      - name: Build APK with full log
+      - name: Build APK
         id: build
         run: |
-          flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
-          EXIT_CODE=$?
-          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-          exit $EXIT_CODE
+          flutter build apk --release --split-per-abi
+          if [ $? -eq 0 ]; then
+            echo "✅ flutter build apk 成功"
+          else
+            echo "❌ flutter build apk 失败"
+            exit 1
+          fi
 
-      - name: Locate APK
+      - name: Copy APK
         if: success()
         run: |
+          echo "查找 APK 文件..."
           APK_PATH=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
-          fi
           if [ -n "$APK_PATH" ]; then
+            echo "找到 APK: $APK_PATH"
             mkdir -p build/app/outputs/flutter-apk
             cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
             echo "apk_found=true" >> $GITHUB_OUTPUT
           else
-            echo "apk_found=false" >> $GITHUB_OUTPUT
+            echo "❌ 未找到 APK"
             exit 1
           fi
 
@@ -148,30 +212,16 @@ jobs:
           echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.build.outcome }}" == "success" ] && [ "${{ steps.locate.outputs.apk_found }}" == "true" ]; then
+          if [ "${{ steps.copy.outputs.apk_found }}" == "true" ]; then
             echo "## ✅ 构建成功！" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/flutter-apk/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
-            if [ -f build.log ]; then
-              echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              tail -200 build.log >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-            fi
           fi
 
       - name: Upload APKs
-        if: steps.locate.outputs.apk_found == 'true'
+        if: steps.copy.outputs.apk_found == 'true'
         uses: actions/upload-artifact@v5
         with:
           name: pho-apk
           path: build/app/outputs/flutter-apk/*.apk
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: warn
