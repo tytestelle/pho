@@ -22,7 +22,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.0'
+          flutter-version: '3.22.6'   # 稳定兼容版
 
       - name: Clean and backup
         run: |
@@ -39,27 +39,25 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write stable Gradle files (AGP 7.2.0, Kotlin 1.8.20, Gradle 7.5)
+      - name: Write Gradle files
         run: |
-          # gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-all.zip
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
 
-          # build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
-              ext.kotlin_version = '1.8.20'
+              ext.kotlin_version = '1.9.24'
               repositories {
                   google()
                   mavenCentral()
               }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:7.2.0'
+                  classpath 'com.android.tools.build:gradle:8.3.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
@@ -81,7 +79,6 @@ jobs:
           }
           EOF
 
-          # settings.gradle
           cat > android/settings.gradle <<'EOF'
           pluginManagement {
               def flutterSdkPath = {
@@ -101,13 +98,12 @@ jobs:
           }
           plugins {
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "7.2.0" apply false
-              id "org.jetbrains.kotlin.android" version "1.8.20" apply false
+              id "com.android.application" version "8.3.0" apply false
+              id "org.jetbrains.kotlin.android" version "1.9.24" apply false
           }
           include ":app"
           EOF
 
-          # app/build.gradle
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -133,12 +129,12 @@ jobs:
               namespace "com.example.pho"
               compileSdk 34
               compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_11
-                  targetCompatibility JavaVersion.VERSION_11
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
               }
               kotlinOptions {
                   languageVersion = '1.8'
-                  jvmTarget = '11'
+                  jvmTarget = '17'
               }
               sourceSets {
                   main.java.srcDirs += 'src/main/kotlin'
@@ -173,7 +169,7 @@ jobs:
           ./gradlew assembleRelease --stacktrace
           cd ..
 
-      - name: Copy APK to expected location
+      - name: Copy APK
         if: success()
         run: |
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
