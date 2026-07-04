@@ -24,72 +24,6 @@ jobs:
         with:
           flutter-version: '3.27.0'
 
-      # 修复 pubspec.yaml 的重复依赖问题，并降级 win32
-      - name: Fix pubspec.yaml
-        run: |
-          # 备份原文件
-          cp pubspec.yaml pubspec.yaml.bak
-          
-          # 使用 awk 去除重复的 dependencies: 块（保留第一个）
-          # 策略：从第一个 dependencies: 开始，到下一个顶级键（如 dev_dependencies:）或文件尾结束
-          # 更简单：删除所有 dependencies: 行，然后在文件末尾追加新的 dependencies 块
-          # 但更安全的方法是：保留第一个 dependencies:，删除后续的。
-          # 我们采用 Python 脚本来做精确处理
-          python3 << 'EOF'
-          import re
-          with open('pubspec.yaml', 'r') as f:
-              lines = f.readlines()
-          
-          # 找到所有 dependencies: 的行号
-          dep_indices = [i for i, line in enumerate(lines) if re.match(r'^dependencies:\s*$', line)]
-          if len(dep_indices) > 1:
-              # 保留第一个，删除从第二个开始的 dependencies: 直到下一个顶级键（非缩进）
-              # 但需要删除整个块，直到遇到下一个顶级键（如 dev_dependencies: 或空行后无缩进）
-              # 简单粗暴：只保留第一个 dependencies: 及其缩进内容，后面的删除
-              first_dep = dep_indices[0]
-              # 找到第二个 dependencies: 的位置
-              second_dep = dep_indices[1]
-              # 删除从 second_dep 到文件尾（或者到下一个顶级键之前）
-              # 我们删除从 second_dep 开始的所有内容，因为后面可能还有 dev_dependencies:
-              # 但更好的做法：保留第一个块，删除后续的重复块。
-              # 我们手动构建新文件
-              new_lines = []
-              i = 0
-              while i < len(lines):
-                  line = lines[i]
-                  # 如果遇到第二个 dependencies: 开始，跳过整个块（直到下一个顶级键）
-                  if i == second_dep:
-                      # 跳过当前行和后续缩进行的，直到遇到非缩进行
-                      while i < len(lines) and (lines[i].startswith(' ') or lines[i].startswith('\t')):
-                          i += 1
-                      # 再跳过空行
-                      while i < len(lines) and lines[i].strip() == '':
-                          i += 1
-                      continue
-                  else:
-                      new_lines.append(line)
-                      i += 1
-              
-              # 写入新文件
-              with open('pubspec.yaml', 'w') as f:
-                  f.writelines(new_lines)
-              print("修复了重复的 dependencies 块。")
-          else:
-              print("没有重复的 dependencies 块。")
-          EOF
-          
-          # 添加或修改 win32 依赖为 4.1.4
-          # 检查是否已有 win32，有则替换，无则添加
-          if grep -q "^  win32:" pubspec.yaml; then
-              sed -i 's/^  win32:.*/  win32: 4.1.4/' pubspec.yaml
-          else
-              # 在 dependencies 块内添加 win32
-              # 找到 dependencies: 行，在它下面添加
-              sed -i '/^dependencies:/a\  win32: 4.1.4' pubspec.yaml
-          fi
-          
-          echo "✅ pubspec.yaml 已修复"
-
       - name: Clean and backup
         run: |
           if [ -d "lib" ]; then cp -r lib lib_backup; fi
@@ -107,6 +41,7 @@ jobs:
 
       - name: Write custom Gradle files (AGP 7.2.0, Gradle 7.5)
         run: |
+          # gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -115,6 +50,7 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
+          # build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.24'
@@ -145,6 +81,7 @@ jobs:
           }
           EOF
 
+          # settings.gradle
           cat > android/settings.gradle <<'EOF'
           pluginManagement {
               def flutterSdkPath = {
@@ -170,6 +107,7 @@ jobs:
           include ":app"
           EOF
 
+          # app/build.gradle (compileSdk 34)
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -193,7 +131,7 @@ jobs:
           }
           android {
               namespace "com.example.pho"
-              compileSdk 33
+              compileSdk 34   # 升级到 34 以满足插件要求
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_11
                   targetCompatibility JavaVersion.VERSION_11
@@ -208,7 +146,7 @@ jobs:
               defaultConfig {
                   applicationId "com.example.pho"
                   minSdkVersion 21
-                  targetSdkVersion 33
+                  targetSdkVersion 34
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
@@ -223,10 +161,13 @@ jobs:
           }
           EOF
 
-          echo "✅ 自定义 Gradle 文件已写入"
+          echo "✅ 自定义 Gradle 文件已写入 (compileSdk 34)"
 
-      - name: Install dependencies
-        run: flutter pub get
+      - name: Clear pub cache and install dependencies
+        run: |
+          # 清除缓存，确保使用最新的依赖解析
+          rm -rf ~/.pub-cache
+          flutter pub get
 
       - name: Build APK via Gradle
         id: build
