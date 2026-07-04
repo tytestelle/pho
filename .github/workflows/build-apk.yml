@@ -39,7 +39,7 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write stable Gradle files (compileSdk 33, AGP 7.2.0)
+      - name: Write final Gradle files
         run: |
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
@@ -50,7 +50,10 @@ jobs:
           EOF
 
           cat > android/gradle.properties <<'EOF'
-          android.suppressUnsupportedCompileSdk=33
+          android.useAndroidX=true
+          android.enableJetifier=true
+          android.suppressUnsupportedCompileSdk=34
+          org.gradle.jvmargs=-Xmx1536M
           EOF
 
           cat > android/build.gradle <<'EOF'
@@ -131,7 +134,7 @@ jobs:
           }
           android {
               namespace "com.example.pho"
-              compileSdk 33
+              compileSdk 34
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_11
                   targetCompatibility JavaVersion.VERSION_11
@@ -146,7 +149,7 @@ jobs:
               defaultConfig {
                   applicationId "com.example.pho"
                   minSdkVersion 21
-                  targetSdkVersion 33
+                  targetSdkVersion 34
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
@@ -161,23 +164,17 @@ jobs:
           }
           EOF
 
-          echo "✅ Gradle 文件已配置 (compileSdk 33)"
+          echo "✅ 最终 Gradle 配置已写入（含 AndroidX）"
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK via Gradle with log
+      - name: Build APK via Gradle
         id: build
         run: |
           cd android
-          stdbuf -oL -eL ./gradlew assembleRelease --stacktrace 2>&1 | tee ../build.log
-          EXIT_CODE=$?
+          ./gradlew assembleRelease --stacktrace
           cd ..
-          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "❌ Gradle 构建失败，退出码: $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
 
       - name: Copy APK
         if: success()
@@ -188,7 +185,7 @@ jobs:
             cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
             echo "apk_found=true" >> $GITHUB_OUTPUT
           else
-            echo "❌ 未找到 APK"
+            echo "❌ 未找到 APK 文件"
             exit 1
           fi
 
@@ -209,12 +206,6 @@ jobs:
             ls -lh build/app/outputs/flutter-apk/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
-            if [ -f build.log ]; then
-              echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              tail -200 build.log >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-            fi
           fi
 
       - name: Upload APKs
@@ -223,11 +214,3 @@ jobs:
         with:
           name: pho-apk
           path: build/app/outputs/flutter-apk/*.apk
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: warn
