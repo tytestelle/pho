@@ -31,10 +31,14 @@ jobs:
         id: build
         # 使用 script 命令强制捕获所有终端输出
         run: |
-          # 使用 script 命令将整个构建过程的输出写入 build.log
+          # 1. 预先创建一个空的 build.log 文件，确保后续上传步骤不会失败
+          touch build.log
+          
+          # 2. 使用 script 命令将整个构建过程的输出写入 build.log
+          #    -q: 安静模式, -e: 返回被运行命令的退出码, -c: 要运行的命令
           script -q -e -c "flutter build apk --release --split-per-abi -v" build.log
-
-          # 检查构建是否成功并生成摘要
+          
+          # 3. 检查构建是否成功并生成摘要
           if [ $? -eq 0 ] && [ -d "build/app/outputs/apk/release" ]; then
             echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -65,7 +69,7 @@ jobs:
           name: pho-apk
           path: build/app/outputs/apk/release/*.apk
 
-      # 无论成败都上传日志，且 path 指向确定存在的文件
+      # 无论成败都上传日志
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v5
