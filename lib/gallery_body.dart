@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'asset.dart';
@@ -65,12 +66,17 @@ class _GalleryBodyState extends State<GalleryBody> {
   Widget _buildItem(Asset asset) {
     if (widget.mode == 'photo') {
       // 照片模式：显示图片或视频缩略图
+      ImageProvider imageProvider;
+      if (asset.local != null) {
+        // 明确将 asset.local 作为 File 传入
+        imageProvider = FileImage(asset.local!);
+      } else {
+        imageProvider = NetworkImage(asset.remote!);
+      }
       return Container(
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: asset.local != null
-                ? FileImage(asset.local as File)
-                : NetworkImage(asset.remote!),
+            image: imageProvider,
             fit: BoxFit.cover,
           ),
         ),
