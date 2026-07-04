@@ -19,160 +19,42 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Flutter
+      - name: Setup Flutter (3.16.9, compatible with win32 4.x)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
+          flutter-version: '3.16.9'
 
-      - name: Write correct Gradle files
+      - name: Fix pubspec.yaml dependencies
         run: |
-          # 确保 gradle/wrapper 存在
-          mkdir -p android/gradle/wrapper
+          # 强制使用 win32 4.1.4（兼容 Dart 2.x）
+          sed -i '/dependency_overrides:/a\  win32: 4.1.4' pubspec.yaml
 
-          cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-all.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-
-          cat > android/gradle.properties <<'EOF'
-          android.useAndroidX=true
-          android.enableJetifier=true
-          android.suppressUnsupportedCompileSdk=34
-          org.gradle.jvmargs=-Xmx1536M
-          EOF
-
-          cat > android/build.gradle <<'EOF'
-          buildscript {
-              ext.kotlin_version = '1.8.20'
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:7.2.0'
-                  classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-          rootProject.buildDir = '../build'
-          subprojects {
-              project.buildDir = "${rootProject.buildDir}/${project.name}"
-          }
-          subprojects {
-              project.evaluationDependsOn(':app')
-          }
-          tasks.register('clean', Delete) {
-              delete rootProject.buildDir
-          }
-          EOF
-
-          cat > android/settings.gradle <<'EOF'
-          pluginManagement {
-              def flutterSdkPath = {
-                  def properties = new Properties()
-                  file("local.properties").withInputStream { properties.load(it) }
-                  def flutterSdkPath = properties.getProperty("flutter.sdk")
-                  assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-                  return flutterSdkPath
-              }
-              settings.ext.flutterSdkPath = flutterSdkPath()
-              includeBuild("${settings.ext.flutterSdkPath}/packages/flutter_tools/gradle")
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-          plugins {
-              id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "7.2.0" apply false
-              id "org.jetbrains.kotlin.android" version "1.8.20" apply false
-          }
-          include ":app"
-          EOF
-
-          cat > android/app/build.gradle <<'EOF'
-          plugins {
-              id "com.android.application"
-              id "kotlin-android"
-              id "dev.flutter.flutter-gradle-plugin"
-          }
-          def localProperties = new Properties()
-          def localPropertiesFile = rootProject.file('local.properties')
-          if (localPropertiesFile.exists()) {
-              localPropertiesFile.withReader('UTF-8') { reader ->
-                  localProperties.load(reader)
-              }
-          }
-          def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-          if (flutterVersionCode == null) {
-              flutterVersionCode = '1'
-          }
-          def flutterVersionName = localProperties.getProperty('flutter.versionName')
-          if (flutterVersionName == null) {
-              flutterVersionName = '1.0'
-          }
-          android {
-              namespace "com.example.pho"
-              compileSdk 34
-              compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_11
-                  targetCompatibility JavaVersion.VERSION_11
-              }
-              kotlinOptions {
-                  languageVersion = '1.8'
-                  jvmTarget = '11'
-              }
-              sourceSets {
-                  main.java.srcDirs += 'src/main/kotlin'
-              }
-              defaultConfig {
-                  applicationId "com.example.pho"
-                  minSdkVersion 21
-                  targetSdkVersion 34
-                  versionCode flutterVersionCode.toInteger()
-                  versionName flutterVersionName
-              }
-              buildTypes {
-                  release {
-                      signingConfig signingConfigs.debug
-                  }
-              }
-          }
-          flutter {
-              source '../..'
-          }
-          EOF
-
-          echo "✅ Gradle 配置已更新"
+      - name: Fix gallery_body.dart (if needed)
+        run: |
+          # 检查是否存在 FileImage 类型错误，如果有则修正
+          if grep -q 'FileImage(asset.local as File)' lib/gallery_body.dart; then
+            echo "修复 gallery_body.dart 中的 FileImage 类型"
+            sed -i 's/FileImage(asset.local as File)/FileImage(asset.local!)/g' lib/gallery_body.dart
+          fi
+          # 如果还有其他错误，再处理
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK using Flutter (capture all output)
+      - name: Clean build
+        run: flutter clean
+
+      - name: Build APK with full log
         id: build
         run: |
-          # 使用 stdbuf 强制输出缓冲，并保存到 build.log
-          stdbuf -oL -eL flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
+          flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
           EXIT_CODE=$?
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "❌ Flutter 构建失败，退出码: $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
+          exit $EXIT_CODE
 
-      - name: Locate and copy APK
+      - name: Locate APK
         if: success()
         run: |
-          # 尝试多个可能的路径
           APK_PATH=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
           if [ -z "$APK_PATH" ]; then
             APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
@@ -182,10 +64,7 @@ jobs:
             cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
             echo "apk_found=true" >> $GITHUB_OUTPUT
           else
-            echo "❌ 未找到 APK 文件，构建产物可能不完整。"
-            echo "查找的路径：build/app/outputs/apk/release 和 android/app/build/outputs/apk/release"
-            ls -R build/app/outputs/apk/ 2>/dev/null || echo "目录不存在"
-            ls -R android/app/build/outputs/apk/ 2>/dev/null || echo "目录不存在"
+            echo "apk_found=false" >> $GITHUB_OUTPUT
             exit 1
           fi
 
