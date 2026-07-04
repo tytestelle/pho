@@ -39,12 +39,8 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write final Gradle files (Groovy DSL)
+      - name: Write final Gradle files
         run: |
-          # 删除所有 .kts 文件（避免混淆）
-          find android -name "*.kts" -type f -delete
-
-          # gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -53,13 +49,11 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-          # gradle.properties
           cat > android/gradle.properties <<'EOF'
           android.suppressUnsupportedCompileSdk=34
-          org.gradle.jvmargs=-Xmx1536m
+          android.suppressUnsupportedCompileSdk=33
           EOF
 
-          # build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.8.20'
@@ -90,7 +84,6 @@ jobs:
           }
           EOF
 
-          # settings.gradle
           cat > android/settings.gradle <<'EOF'
           pluginManagement {
               def flutterSdkPath = {
@@ -116,7 +109,6 @@ jobs:
           include ":app"
           EOF
 
-          # app/build.gradle
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -170,39 +162,38 @@ jobs:
           }
           EOF
 
-          echo "✅ 最终 Gradle 配置已写入（已删除所有 .kts 文件）"
+          echo "✅ 最终 Gradle 配置已写入"
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK via Gradle (with full logs)
+      - name: Build APK via Gradle with log
         id: build
         run: |
           cd android
-          # 输出完整日志到文件，同时打印到控制台
-          ./gradlew assembleRelease --stacktrace 2>&1 | tee ../gradle_output.log
+          # 使用 stdbuf 强制捕获所有输出，同时保留控制台输出
+          stdbuf -oL -eL ./gradlew assembleRelease --stacktrace 2>&1 | tee ../build.log
           EXIT_CODE=$?
           cd ..
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "## ❌ Gradle 构建失败，退出码: $EXIT_CODE" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 最后 200 行错误日志：" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -200 gradle_output.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "❌ Gradle 构建失败，退出码: $EXIT_CODE"
             exit $EXIT_CODE
           fi
 
       - name: Copy APK
         if: success()
         run: |
+          # 查找 APK（可能在多个 ABI 子目录中）
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
           if [ -n "$APK_PATH" ]; then
             mkdir -p build/app/outputs/flutter-apk
             cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
             echo "apk_found=true" >> $GITHUB_OUTPUT
           else
-            echo "apk_found=false" >> $GITHUB_OUTPUT
+            echo "❌ 未找到 APK 文件，请检查构建产物。"
+            echo "目录内容："
+            ls -R android/app/build/outputs/apk/ 2>/dev/null || echo "目录不存在"
             exit 1
           fi
 
@@ -218,16 +209,30 @@ jobs:
           echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.build.outputs.apk_found }}" = "true" ]; then
+          if [ "${{ steps.build.outcome }}" == "success" ] && [ "${{ steps.copy.outputs.apk_found }}" == "true" ]; then
             echo "## ✅ 构建成功！" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/flutter-apk/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
+            if [ -f build.log ]; then
+              echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              tail -200 build.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
           fi
 
       - name: Upload APKs
-        if: steps.build.outputs.apk_found == 'true'
+        if: steps.copy.outputs.apk_found == 'true'
         uses: actions/upload-artifact@v5
         with:
           name: pho-apk
           path: build/app/outputs/flutter-apk/*.apk
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: warn
