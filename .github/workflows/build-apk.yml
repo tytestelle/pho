@@ -39,7 +39,7 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write final Gradle files
+      - name: Write Gradle files
         run: |
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
@@ -164,16 +164,18 @@ jobs:
           }
           EOF
 
-          echo "✅ 最终 Gradle 配置已写入（含 AndroidX）"
+          echo "✅ Gradle 配置已写入"
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK via Gradle
+      - name: Build APK with full logging
         id: build
         run: |
+          set -e
           cd android
-          ./gradlew assembleRelease --stacktrace
+          # 使用 script 命令强制捕获所有输出到 build.log，同时保留控制台输出
+          script -q -e -c "./gradlew assembleRelease --stacktrace" ../build.log
           cd ..
 
       - name: Copy APK
@@ -186,6 +188,8 @@ jobs:
             echo "apk_found=true" >> $GITHUB_OUTPUT
           else
             echo "❌ 未找到 APK 文件"
+            echo "查看产物目录："
+            find android -name "*.apk" 2>/dev/null || echo "无 APK"
             exit 1
           fi
 
@@ -206,7 +210,21 @@ jobs:
             ls -lh build/app/outputs/flutter-apk/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
+            if [ -f build.log ]; then
+              echo "### 构建日志（最后 200 行）" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              tail -200 build.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
           fi
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: warn
 
       - name: Upload APKs
         if: steps.copy.outputs.apk_found == 'true'
