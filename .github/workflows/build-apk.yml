@@ -16,7 +16,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'   # 使用最新稳定版（>=3.27）
+          flutter-version: 'stable'
 
       - name: Clean project
         run: flutter clean
@@ -27,31 +27,33 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
-      - name: Build APK
+      - name: Build APK with full logging
         id: build
+        # 使用 script 命令强制捕获所有终端输出
         run: |
-          echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|----|" >> $GITHUB_STEP_SUMMARY
-          echo "| 分支 | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 提交 | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
-          echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          # 使用 script 命令将整个构建过程的输出写入 build.log
+          script -q -e -c "flutter build apk --release --split-per-abi -v" build.log
 
-          flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
-
+          # 检查构建是否成功并生成摘要
           if [ $? -eq 0 ] && [ -d "build/app/outputs/apk/release" ]; then
+            echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|----|" >> $GITHUB_STEP_SUMMARY
+            echo "| 分支 | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 提交 | ${{ github.sha }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
+            echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
             echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/apk/release/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 最后 150 行错误日志：" >> $GITHUB_STEP_SUMMARY
+            echo "### 完整构建日志：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -150 build.log >> $GITHUB_STEP_SUMMARY
+            cat build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
@@ -63,6 +65,7 @@ jobs:
           name: pho-apk
           path: build/app/outputs/apk/release/*.apk
 
+      # 无论成败都上传日志，且 path 指向确定存在的文件
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v5
