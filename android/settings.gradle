@@ -20,7 +20,7 @@ pluginManagement {
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
     id "com.android.application" version "7.2.0" apply false
-    id "org.jetbrains.kotlin.android" version "1.9.24" apply false   // 版本匹配
+    id "org.jetbrains.kotlin.android" version "1.9.24" apply false   // 与 build.gradle 版本一致
 }
 
 include ":app"
