@@ -39,9 +39,8 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write Gradle files (AGP 7.2.0, Gradle 7.5, Kotlin 1.8.20, compileSdk 34)
+      - name: Write final Gradle files
         run: |
-          # gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -50,12 +49,10 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-          # gradle.properties (抑制 compileSdk 警告)
           cat > android/gradle.properties <<'EOF'
           android.suppressUnsupportedCompileSdk=34
           EOF
 
-          # build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.8.20'
@@ -86,7 +83,6 @@ jobs:
           }
           EOF
 
-          # settings.gradle
           cat > android/settings.gradle <<'EOF'
           pluginManagement {
               def flutterSdkPath = {
@@ -112,7 +108,6 @@ jobs:
           include ":app"
           EOF
 
-          # app/build.gradle
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -166,7 +161,7 @@ jobs:
           }
           EOF
 
-          echo "✅ Gradle 文件已配置 (AGP 7.2.0, Gradle 7.5, Kotlin 1.8.20)"
+          echo "✅ 最终 Gradle 配置已写入"
 
       - name: Install dependencies
         run: flutter pub get
