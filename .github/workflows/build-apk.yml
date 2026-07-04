@@ -39,8 +39,12 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write final Gradle files
+      - name: Write final Gradle files (Groovy DSL)
         run: |
+          # 删除所有 .kts 文件（避免混淆）
+          find android -name "*.kts" -type f -delete
+
+          # gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -49,10 +53,13 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
+          # gradle.properties
           cat > android/gradle.properties <<'EOF'
-          android.suppressUnsupportedCompileSdk=34,33
+          android.suppressUnsupportedCompileSdk=34
+          org.gradle.jvmargs=-Xmx1536m
           EOF
 
+          # build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.8.20'
@@ -83,6 +90,7 @@ jobs:
           }
           EOF
 
+          # settings.gradle
           cat > android/settings.gradle <<'EOF'
           pluginManagement {
               def flutterSdkPath = {
@@ -108,6 +116,7 @@ jobs:
           include ":app"
           EOF
 
+          # app/build.gradle
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -161,26 +170,25 @@ jobs:
           }
           EOF
 
-          echo "✅ 最终 Gradle 配置已写入"
+          echo "✅ 最终 Gradle 配置已写入（已删除所有 .kts 文件）"
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK via Gradle (full output)
+      - name: Build APK via Gradle (with full logs)
         id: build
         run: |
           cd android
-          ./gradlew assembleRelease --stacktrace --warning-mode all 2>&1 | tee ../build.log
+          # 输出完整日志到文件，同时打印到控制台
+          ./gradlew assembleRelease --stacktrace 2>&1 | tee ../gradle_output.log
           EXIT_CODE=$?
           cd ..
-          echo "EXIT_CODE=$EXIT_CODE" >> $GITHUB_OUTPUT
-          echo "构建退出码: $EXIT_CODE"
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "## ❌ 构建失败 (退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
+            echo "## ❌ Gradle 构建失败，退出码: $EXIT_CODE" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
+            echo "### 最后 200 行错误日志：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -200 build.log >> $GITHUB_STEP_SUMMARY
+            tail -200 gradle_output.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit $EXIT_CODE
           fi
@@ -216,13 +224,6 @@ jobs:
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
           fi
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: build-log
-          path: build.log
 
       - name: Upload APKs
         if: steps.build.outputs.apk_found == 'true'
