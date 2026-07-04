@@ -42,7 +42,9 @@ dependencies:
   flutter_image_compress: ^2.0.3
   gallery_saver: ^2.3.2
   vibration: ^1.8.1
-  win32: 4.1.4   # 强制降级，解决 UnmodifiableUint8ListView 问题
+
+dependency_overrides:
+  win32: ^5.0.0   # 强制使用 5.x，移除 UnmodifiableUint8ListView
 
 dev_dependencies:
   flutter_test:
