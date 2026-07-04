@@ -131,7 +131,7 @@ jobs:
           }
           android {
               namespace "com.example.pho"
-              compileSdk 33
+              compileSdk 34
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_11
                   targetCompatibility JavaVersion.VERSION_11
@@ -146,7 +146,7 @@ jobs:
               defaultConfig {
                   applicationId "com.example.pho"
                   minSdkVersion 21
-                  targetSdkVersion 33
+                  targetSdkVersion 34
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
