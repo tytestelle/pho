@@ -69,7 +69,7 @@ class _GalleryBodyState extends State<GalleryBody> {
         decoration: BoxDecoration(
           image: DecorationImage(
             image: asset.local != null
-                ? FileImage(asset.local!)
+                ? FileImage(asset.local as File)
                 : NetworkImage(asset.remote!),
             fit: BoxFit.cover,
           ),
