@@ -19,10 +19,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # 关键：降级到 Flutter 3.16.0（兼容 win32 4.x）
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.0'
+          flutter-version: '3.16.0'
 
       - name: Clean and backup
         run: |
@@ -107,7 +108,7 @@ jobs:
           include ":app"
           EOF
 
-          # 4. app/build.gradle（修复注释，使用 //，并升级 compileSdk 到 34）
+          # 4. app/build.gradle
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -131,7 +132,7 @@ jobs:
           }
           android {
               namespace "com.example.pho"
-              compileSdk 34   // 升级到 34 以满足插件要求
+              compileSdk 34
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_11
                   targetCompatibility JavaVersion.VERSION_11
@@ -161,7 +162,7 @@ jobs:
           }
           EOF
 
-          echo "✅ 自定义 Gradle 文件已写入（注释已修复，compileSdk=34）"
+          echo "✅ 自定义 Gradle 文件已写入"
 
       - name: Install dependencies
         run: flutter pub get
