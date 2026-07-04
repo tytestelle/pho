@@ -1,3 +1,11 @@
+name: pho
+description: A new Flutter project.
+publish_to: 'none'
+version: 1.3.4+18
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"   # 添加 SDK 约束
+
 dependencies:
   flutter:
     sdk: flutter
@@ -33,8 +41,36 @@ dependencies:
   url_launcher: ^6.1.11
   flutter_image_compress: ^2.0.3
   gallery_saver: ^2.3.2
-  vibration: ^3.1.8   # ✅ 使用 3.x 版本
+  vibration: ^3.1.8
 
 dependency_overrides:
   win32: ^5.0.0
   flutter_plugin_android_lifecycle: ^2.0.19
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/images/broken.png
+    - assets/images/gray.jpg
+    - assets/icon/pho_icon.png
+  fonts:
+    - family: Ubuntu
+      fonts:
+        - asset: assets/fonts/Ubuntu-M.ttf
+    - family: Ubuntu-thin
+      fonts:
+        - asset: assets/fonts/Ubuntu-Th.ttf
+    - family: Ubuntu-condensed
+      fonts:
+        - asset: assets/fonts/Ubuntu-C.ttf
+
+flutter_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/pho_icon.png"
