@@ -37,20 +37,31 @@ jobs:
       - name: Clean project
         run: flutter clean
 
-      # 🔧 关键修复：检查并创建 Android 目录
-      - name: Ensure Android platform exists
+      # 🔧 关键修复：重新生成完整的 Android 目录
+      - name: Regenerate Android platform
         run: |
           echo "📁 检查项目结构..."
-          ls -la
-          
-          if [ ! -d "android" ]; then
-            echo "⚠️ android 目录不存在，正在添加 Android 平台支持..."
+          if [ ! -d "android" ] || [ ! -f "android/gradlew" ]; then
+            echo "⚠️ android 目录不完整或缺少 gradlew，正在重新生成..."
+            # 备份现有 android 目录（如果有自定义配置）
+            if [ -d "android" ]; then
+              echo "📦 备份现有 android 目录到 android_backup"
+              mv android android_backup
+            fi
+            # 重新生成 Android 平台
+            echo "🔄 执行 flutter create --platforms=android ."
             flutter create --platforms=android .
+            # 恢复自定义源码（app/src 等），避免丢失您的代码
+            if [ -d "android_backup" ]; then
+              echo "♻️ 恢复自定义源码和资源..."
+              cp -r android_backup/app/src android/app/ 2>/dev/null || true
+              # 如果备份中有自定义的 build.gradle，也可以选择性恢复，但为安全先不覆盖
+              echo "已恢复源码，如有特殊 Gradle 配置请检查。"
+            fi
           else
-            echo "✅ android 目录已存在。"
+            echo "✅ android 目录完整，gradlew 存在。"
           fi
-          
-          echo "📁 检查 android 目录内容："
+          echo "📁 检查最终 android 目录内容："
           ls -la android/
 
       - name: Make gradlew executable
@@ -59,8 +70,7 @@ jobs:
             chmod +x android/gradlew
             echo "✅ gradlew 已设置为可执行"
           else
-            echo "❌ android/gradlew 不存在！"
-            echo "📁 android 目录内容："
+            echo "❌ android/gradlew 仍然不存在！"
             ls -la android/
             exit 1
           fi
@@ -71,13 +81,13 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
-      - name: Build APK via Gradle
+      # 现在使用 flutter build 而不是直接调用 gradlew
+      - name: Build APK with Flutter
         id: build
         run: |
-          cd android
-          ./gradlew assembleRelease --stacktrace > ../build.log 2>&1
+          # 使用 stdbuf 强制禁用输出缓冲
+          stdbuf -oL -eL flutter build apk --release --split-per-abi -v > build.log 2>&1
           EXIT_CODE=$?
-          cd ..
 
           APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
 
@@ -96,7 +106,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/apk/release/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
-            echo "## ❌ 构建失败 (Gradle 退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
+            echo "## ❌ 构建失败 (退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
