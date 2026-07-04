@@ -13,11 +13,22 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # 1. 关键修复：使用最新稳定版 Flutter，避免版本不兼容问题
+      # 改用指定具体版本，避免无法解析 'stable'
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 'stable'
+          flutter-version: '3.29.0'  # 显式指定与 Gradle 8.x 兼容的最新稳定版
+
+      - name: Print environment info
+        run: |
+          echo "## 🌐 环境信息" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 组件 | 版本 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Java | $(java -version 2>&1 | head -n1) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Flutter | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gradle (wrapper) | $(./android/gradlew --version 2>/dev/null | grep Gradle | head -n1 || echo '未找到') |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Clean project
         run: flutter clean
@@ -28,21 +39,16 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
-      - name: Build APK with full logging
+      - name: Build APK via Gradle
         id: build
         run: |
-          # 2. 使用 stdbuf 强制禁用输出缓冲，确保所有日志都被捕获
-          #    同时使用 script 命令创建伪终端，捕获崩溃前的输出
-          #    将 stdout 和 stderr 都重定向到 build.log
-          stdbuf -oL -eL script -q -c "flutter build apk --release --split-per-abi -v" build.log 2>&1
-          
-          # 保存命令的退出码
+          cd android
+          ./gradlew assembleRelease --stacktrace > ../build.log 2>&1
           EXIT_CODE=$?
+          cd ..
           
-          # 3. 使用 find 命令查找生成的 APK，判断构建是否真正成功
           APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
           
-          # 生成摘要
           echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
@@ -53,22 +59,16 @@ jobs:
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # 根据 APK 是否生成来判断构建是否成功
           if [ $APK_FOUND -gt 0 ]; then
             echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/apk/release/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
-            echo "## ❌ 构建失败 (退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
+            echo "## ❌ 构建失败 (Gradle 退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 完整构建日志：" >> $GITHUB_STEP_SUMMARY
+            echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            # 4. 如果文件存在则显示内容，否则显示提示信息
-            if [ -f build.log ]; then
-              cat build.log >> $GITHUB_STEP_SUMMARY
-            else
-              echo "build.log 文件未生成，请检查构建环境。" >> $GITHUB_STEP_SUMMARY
-            fi
+            tail -200 build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit $EXIT_CODE
           fi
@@ -80,25 +80,10 @@ jobs:
           name: pho-apk
           path: build/app/outputs/apk/release/*.apk
 
-      # 5. 增强的文件存在性检查：先查找文件，再决定是否上传
       - name: Upload build log
         if: always()
-        run: |
-          # 查找 build.log 文件
-          LOG_FILE=$(find . -name "build.log" -type f)
-          if [ -n "$LOG_FILE" ]; then
-            echo "found=true" >> $GITHUB_OUTPUT
-            echo "log_path=$LOG_FILE" >> $GITHUB_OUTPUT
-          else
-            echo "found=false" >> $GITHUB_OUTPUT
-            echo "build.log 文件未找到，跳过上传。" >> $GITHUB_STEP_SUMMARY
-          fi
-        id: check_log
-
-      - name: Upload build log (if exists)
-        if: always() && steps.check_log.outputs.found == 'true'
         uses: actions/upload-artifact@v5
         with:
           name: build-log
-          path: ${{ steps.check_log.outputs.log_path }}
+          path: build.log
           if-no-files-found: warn
