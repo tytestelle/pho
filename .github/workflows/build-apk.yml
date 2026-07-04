@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Setup Java
-        uses: actions/setup-java@v5   # 升级到 v5
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
@@ -37,31 +37,33 @@ jobs:
       - name: Clean project
         run: flutter clean
 
-      # 修复缺失的 Gradle Wrapper
-      - name: Fix missing gradlew
+      # 🔧 关键修复：检查并创建 Android 目录
+      - name: Ensure Android platform exists
         run: |
-          if [ ! -f "android/gradlew" ]; then
-            echo "⚠️ android/gradlew 不存在，正在修复..."
-            # 备份现有 android 目录（如果有自定义配置）
-            if [ -d "android" ]; then
-              mv android android_backup
-            fi
-            # 使用 flutter create 生成标准的 Android 项目结构
+          echo "📁 检查项目结构..."
+          ls -la
+          
+          if [ ! -d "android" ]; then
+            echo "⚠️ android 目录不存在，正在添加 Android 平台支持..."
             flutter create --platforms=android .
-            # 将备份中的自定义文件（如 app/src/main 等）复制回来（如果有）
-            if [ -d "android_backup" ]; then
-              # 只复制 app 源码和资源，避免覆盖 Gradle 配置
-              cp -r android_backup/app/src android/app/
-              # 如果有自定义的 build.gradle 等，可以谨慎处理，这里先跳过
-              echo "已恢复部分自定义配置，如有特殊 Gradle 配置请手动检查。"
-            fi
           else
-            echo "✅ android/gradlew 已存在。"
+            echo "✅ android 目录已存在。"
           fi
+          
+          echo "📁 检查 android 目录内容："
+          ls -la android/
 
-      # 给 Gradle Wrapper 添加执行权限
       - name: Make gradlew executable
-        run: chmod +x android/gradlew
+        run: |
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+            echo "✅ gradlew 已设置为可执行"
+          else
+            echo "❌ android/gradlew 不存在！"
+            echo "📁 android 目录内容："
+            ls -la android/
+            exit 1
+          fi
 
       - name: Install dependencies
         run: |
