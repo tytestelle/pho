@@ -32,8 +32,8 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = '11'          // 与 Java 版本保持一致，解决 JVM 目标不匹配警告
-        languageVersion = '1.8'   // 强制指定 Kotlin 语言版本为 1.8，避免使用已废弃的 1.4
+        languageVersion = '1.8'
+        jvmTarget = '11'
     }
 
     sourceSets {
