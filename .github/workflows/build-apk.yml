@@ -24,56 +24,30 @@ jobs:
         with:
           flutter-version: '3.27.0'
 
-      - name: Print environment info
+      - name: Clean and backup project
         run: |
-          echo "## 🌐 环境信息" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| 组件 | 版本 |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Java | $(java -version 2>&1 | head -n1) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Flutter | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          # 备份关键源码和资源（避免 flutter create 覆盖）
+          if [ -d "lib" ]; then cp -r lib lib_backup; fi
+          if [ -d "assets" ]; then cp -r assets assets_backup; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml pubspec.yaml.backup; fi
+          echo "已备份 lib、assets 和 pubspec.yaml"
 
-      - name: Clean project
-        run: flutter clean
-
-      # 🔧 关键修复：重新生成完整的 Android 目录
-      - name: Regenerate Android platform
+      - name: Force regenerate Android platform
         run: |
-          echo "📁 检查项目结构..."
-          if [ ! -d "android" ] || [ ! -f "android/gradlew" ]; then
-            echo "⚠️ android 目录不完整或缺少 gradlew，正在重新生成..."
-            # 备份现有 android 目录（如果有自定义配置）
-            if [ -d "android" ]; then
-              echo "📦 备份现有 android 目录到 android_backup"
-              mv android android_backup
-            fi
-            # 重新生成 Android 平台
-            echo "🔄 执行 flutter create --platforms=android ."
-            flutter create --platforms=android .
-            # 恢复自定义源码（app/src 等），避免丢失您的代码
-            if [ -d "android_backup" ]; then
-              echo "♻️ 恢复自定义源码和资源..."
-              cp -r android_backup/app/src android/app/ 2>/dev/null || true
-              # 如果备份中有自定义的 build.gradle，也可以选择性恢复，但为安全先不覆盖
-              echo "已恢复源码，如有特殊 Gradle 配置请检查。"
-            fi
-          else
-            echo "✅ android 目录完整，gradlew 存在。"
-          fi
-          echo "📁 检查最终 android 目录内容："
+          # 删除现有 android 目录（如果存在）
+          rm -rf android
+          # 重新生成完整的 Flutter 项目（包含所有平台）
+          flutter create .
+          # 恢复备份的源码和资源
+          if [ -d "lib_backup" ]; then rm -rf lib && cp -r lib_backup lib; fi
+          if [ -d "assets_backup" ]; then rm -rf assets && cp -r assets_backup assets; fi
+          if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
+          echo "已恢复源码和资源"
+          echo "检查 android 目录："
           ls -la android/
 
       - name: Make gradlew executable
-        run: |
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
-            echo "✅ gradlew 已设置为可执行"
-          else
-            echo "❌ android/gradlew 仍然不存在！"
-            ls -la android/
-            exit 1
-          fi
+        run: chmod +x android/gradlew
 
       - name: Install dependencies
         run: |
@@ -81,16 +55,16 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
-      # 现在使用 flutter build 而不是直接调用 gradlew
-      - name: Build APK with Flutter
+      - name: Build APK with full logging
         id: build
         run: |
-          # 使用 stdbuf 强制禁用输出缓冲
-          stdbuf -oL -eL flutter build apk --release --split-per-abi -v > build.log 2>&1
+          # 使用 script 命令强制捕获所有输出到 build.log
+          # -q 静默，-e 返回被运行命令的退出码，-c 要运行的命令
+          script -q -e -c "flutter build apk --release --split-per-abi -v" build.log
           EXIT_CODE=$?
+          echo "构建退出码: $EXIT_CODE"
 
-          APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
-
+          # 生成构建摘要
           echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
@@ -101,6 +75,8 @@ jobs:
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
+          # 检查 APK 是否生成
+          APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
           if [ $APK_FOUND -gt 0 ]; then
             echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -108,9 +84,9 @@ jobs:
           else
             echo "## ❌ 构建失败 (退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
+            echo "### 完整构建日志：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -200 build.log >> $GITHUB_STEP_SUMMARY
+            cat build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit $EXIT_CODE
           fi
