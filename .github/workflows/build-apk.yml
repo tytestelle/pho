@@ -24,25 +24,23 @@ jobs:
         with:
           flutter-version: '3.19.6'
 
-      - name: Backup source and pubspec
+      - name: Clean and backup
         run: |
-          cp -r lib lib_backup
-          cp -r assets assets_backup
-          cp pubspec.yaml pubspec.yaml.backup
+          if [ -d "lib" ]; then cp -r lib lib_backup; fi
+          if [ -d "assets" ]; then cp -r assets assets_backup; fi
+          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml pubspec.yaml.backup; fi
 
       - name: Regenerate Android platform
         run: |
           rm -rf android
           flutter create --platforms=android .
-          # 恢复源码和 pubspec
-          rm -rf lib && cp -r lib_backup lib
-          rm -rf assets && cp -r assets_backup assets
-          cp pubspec.yaml.backup pubspec.yaml
+          if [ -d "lib_backup" ]; then rm -rf lib && cp -r lib_backup lib; fi
+          if [ -d "assets_backup" ]; then rm -rf assets && cp -r assets_backup assets; fi
+          if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write correct Gradle files (with AndroidX)
+      - name: Write final Gradle files
         run: |
-          mkdir -p android/gradle/wrapper
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -166,40 +164,28 @@ jobs:
           }
           EOF
 
-          echo "✅ Gradle 文件已覆盖（含 AndroidX）"
-
-      - name: Fix gallery_body.dart FileImage error
-        run: |
-          # 如果存在 FileImage(asset.local as File) 则改为 FileImage(asset.local!)
-          sed -i 's/FileImage(asset.local as File)/FileImage(asset.local!)/g' lib/gallery_body.dart
-          # 如果存在 FileImage(asset.local!) 则保持不变
+          echo "✅ Gradle 文件已配置"
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK with full log
+      - name: Build APK using Flutter
         id: build
         run: |
-          flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
-          EXIT_CODE=$?
-          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
-          exit $EXIT_CODE
+          flutter build apk --release --split-per-abi
 
-      - name: Locate APK
+      - name: List APK files
         if: success()
         run: |
-          APK_PATH=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
-          if [ -z "$APK_PATH" ]; then
-            APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
-          fi
-          if [ -n "$APK_PATH" ]; then
-            mkdir -p build/app/outputs/flutter-apk
-            cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
-            echo "apk_found=true" >> $GITHUB_OUTPUT
-          else
-            echo "apk_found=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
+          echo "APK 文件列表："
+          ls -lh build/app/outputs/flutter-apk/ || echo "目录不存在"
+
+      - name: Upload APKs
+        if: success()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pho-apk
+          path: build/app/outputs/flutter-apk/*.apk
 
       - name: Generate summary
         if: always()
@@ -213,30 +199,9 @@ jobs:
           echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.build.outcome }}" == "success" ] && [ "${{ steps.locate.outputs.apk_found }}" == "true" ]; then
-            echo "## ✅ 构建成功！" >> $GITHUB_STEP_SUMMARY
+          if [ -d "build/app/outputs/flutter-apk" ] && [ "$(ls -A build/app/outputs/flutter-apk/*.apk 2>/dev/null)" ]; then
+            echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/flutter-apk/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
-            if [ -f build.log ]; then
-              echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              tail -200 build.log >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-            fi
           fi
-
-      - name: Upload APKs
-        if: steps.locate.outputs.apk_found == 'true'
-        uses: actions/upload-artifact@v5
-        with:
-          name: pho-apk
-          path: build/app/outputs/flutter-apk/*.apk
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: warn
