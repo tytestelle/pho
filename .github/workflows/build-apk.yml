@@ -39,7 +39,7 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write custom Gradle files (AGP 7.2.0, Gradle 7.5)
+      - name: Write custom Gradle files (AGP 7.2.0, Gradle 7.5, no subprojects kotlinOptions)
         run: |
           # 1. gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
@@ -50,7 +50,7 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-          # 2. build.gradle
+          # 2. build.gradle（移除了 subprojects 中的 afterEvaluate）
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.24'
@@ -67,23 +67,6 @@ jobs:
               repositories {
                   google()
                   mavenCentral()
-              }
-          }
-          subprojects {
-              afterEvaluate { project ->
-                  if (project.hasProperty('android')) {
-                      project.android {
-                          compileSdk 33
-                          compileOptions {
-                              sourceCompatibility JavaVersion.VERSION_11
-                              targetCompatibility JavaVersion.VERSION_11
-                          }
-                          kotlinOptions {
-                              languageVersion = '1.8'
-                              jvmTarget = '11'
-                          }
-                      }
-                  }
               }
           }
           rootProject.buildDir = '../build'
@@ -178,7 +161,7 @@ jobs:
           }
           EOF
 
-          echo "✅ 自定义 Gradle 文件已写入"
+          echo "✅ 自定义 Gradle 文件已写入（无 subprojects 的 kotlinOptions）"
 
       - name: Install dependencies
         run: flutter pub get
