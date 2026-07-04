@@ -23,7 +23,7 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.example.pho"   // ⚠️ 替换为你的实际包名
+    namespace "com.example.pho"
     compileSdk 33
 
     compileOptions {
@@ -40,7 +40,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.pho"   // ⚠️ 替换为你的实际包名
+        applicationId "com.example.pho"
         minSdkVersion 21
         targetSdkVersion 33
         versionCode flutterVersionCode.toInteger()
@@ -49,7 +49,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug   // 如需正式签名请替换
+            signingConfig signingConfigs.debug
         }
     }
 }
