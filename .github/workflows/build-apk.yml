@@ -22,7 +22,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.6'   # 稳定兼容版
+          flutter-version: '3.19.6'   # 经验证完全可用
 
       - name: Clean and backup
         run: |
@@ -39,7 +39,7 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write Gradle files
+      - name: Write Gradle files (AGP 8.3.0, Kotlin 1.9.24, Gradle 8.4)
         run: |
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
@@ -157,7 +157,7 @@ jobs:
           }
           EOF
 
-          echo "✅ Gradle 文件已配置"
+          echo "✅ Gradle 文件已配置 (AGP 8.3.0, Kotlin 1.9.24, Gradle 8.4)"
 
       - name: Install dependencies
         run: flutter pub get
