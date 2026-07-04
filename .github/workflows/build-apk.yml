@@ -27,11 +27,9 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
-      # 关键：不使用 continue-on-error，让构建失败直接导致 job 失败
       - name: Build APK
         id: build
         run: |
-          # 生成构建摘要头部
           echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
@@ -42,10 +40,8 @@ jobs:
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          # 执行构建，输出重定向到 build.log，同时打印到控制台
           flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
 
-          # 如果构建成功，列出 APK 并写入摘要
           if [ $? -eq 0 ] && [ -d "build/app/outputs/apk/release" ]; then
             echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -53,11 +49,11 @@ jobs:
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### 最后 100 行错误日志：" >> $GITHUB_STEP_SUMMARY
+            echo "### 最后 150 行错误日志：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -100 build.log >> $GITHUB_STEP_SUMMARY
+            tail -150 build.log >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            exit 1   # 强制 job 失败
+            exit 1
           fi
 
       - name: Upload APKs
