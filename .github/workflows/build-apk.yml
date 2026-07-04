@@ -24,23 +24,11 @@ jobs:
         with:
           flutter-version: '3.19.6'
 
-      - name: Clean and backup
+      - name: Write correct Gradle files
         run: |
-          if [ -d "lib" ]; then cp -r lib lib_backup; fi
-          if [ -d "assets" ]; then cp -r assets assets_backup; fi
-          if [ -f "pubspec.yaml" ]; then cp pubspec.yaml pubspec.yaml.backup; fi
+          # 确保 gradle/wrapper 存在
+          mkdir -p android/gradle/wrapper
 
-      - name: Regenerate Android platform
-        run: |
-          rm -rf android
-          flutter create --platforms=android .
-          if [ -d "lib_backup" ]; then rm -rf lib && cp -r lib_backup lib; fi
-          if [ -d "assets_backup" ]; then rm -rf assets && cp -r assets_backup assets; fi
-          if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
-          chmod +x android/gradlew
-
-      - name: Write Gradle files (AndroidX & Kotlin 1.8.20)
-        run: |
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -164,36 +152,40 @@ jobs:
           }
           EOF
 
-          echo "✅ Gradle 文件已配置"
+          echo "✅ Gradle 配置已更新"
 
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK using Flutter
+      - name: Build APK using Flutter (capture all output)
         id: build
         run: |
-          flutter build apk --release --split-per-abi
-          if [ $? -eq 0 ]; then
-            echo "✅ flutter build apk 成功"
-          else
-            echo "❌ flutter build apk 失败"
-            exit 1
+          # 使用 stdbuf 强制输出缓冲，并保存到 build.log
+          stdbuf -oL -eL flutter build apk --release --split-per-abi -v 2>&1 | tee build.log
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ Flutter 构建失败，退出码: $EXIT_CODE"
+            exit $EXIT_CODE
           fi
 
-      - name: Copy APK
+      - name: Locate and copy APK
         if: success()
         run: |
-          echo "查找 APK 文件..."
-          # 检查 flutter 默认输出路径
+          # 尝试多个可能的路径
           APK_PATH=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
+          fi
           if [ -n "$APK_PATH" ]; then
-            echo "找到 APK: $APK_PATH"
             mkdir -p build/app/outputs/flutter-apk
             cp "$APK_PATH" build/app/outputs/flutter-apk/app-release.apk
             echo "apk_found=true" >> $GITHUB_OUTPUT
           else
-            echo "❌ 未找到 APK，列出目录内容："
-            ls -R build/app/outputs/apk/ || echo "目录不存在"
+            echo "❌ 未找到 APK 文件，构建产物可能不完整。"
+            echo "查找的路径：build/app/outputs/apk/release 和 android/app/build/outputs/apk/release"
+            ls -R build/app/outputs/apk/ 2>/dev/null || echo "目录不存在"
+            ls -R android/app/build/outputs/apk/ 2>/dev/null || echo "目录不存在"
             exit 1
           fi
 
@@ -209,16 +201,30 @@ jobs:
           echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ steps.copy.outputs.apk_found }}" == "true" ]; then
+          if [ "${{ steps.build.outcome }}" == "success" ] && [ "${{ steps.locate.outputs.apk_found }}" == "true" ]; then
             echo "## ✅ 构建成功！" >> $GITHUB_STEP_SUMMARY
             ls -lh build/app/outputs/flutter-apk/*.apk | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
+            if [ -f build.log ]; then
+              echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              tail -200 build.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
           fi
 
       - name: Upload APKs
-        if: steps.copy.outputs.apk_found == 'true'
+        if: steps.locate.outputs.apk_found == 'true'
         uses: actions/upload-artifact@v5
         with:
           name: pho-apk
           path: build/app/outputs/flutter-apk/*.apk
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: warn
