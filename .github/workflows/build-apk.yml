@@ -13,18 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # 设置 Java 17（Flutter 3.27 需要）
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5   # 升级到 v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 指定具体 Flutter 版本，避免 'stable' 解析失败
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.0'   # 明确版本号
+          flutter-version: '3.27.0'
 
       - name: Print environment info
         run: |
@@ -34,11 +32,36 @@ jobs:
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
           echo "| Java | $(java -version 2>&1 | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Gradle Wrapper | $(./android/gradlew --version 2>/dev/null | grep Gradle | head -n1 || echo '未找到') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Clean project
         run: flutter clean
+
+      # 修复缺失的 Gradle Wrapper
+      - name: Fix missing gradlew
+        run: |
+          if [ ! -f "android/gradlew" ]; then
+            echo "⚠️ android/gradlew 不存在，正在修复..."
+            # 备份现有 android 目录（如果有自定义配置）
+            if [ -d "android" ]; then
+              mv android android_backup
+            fi
+            # 使用 flutter create 生成标准的 Android 项目结构
+            flutter create --platforms=android .
+            # 将备份中的自定义文件（如 app/src/main 等）复制回来（如果有）
+            if [ -d "android_backup" ]; then
+              # 只复制 app 源码和资源，避免覆盖 Gradle 配置
+              cp -r android_backup/app/src android/app/
+              # 如果有自定义的 build.gradle 等，可以谨慎处理，这里先跳过
+              echo "已恢复部分自定义配置，如有特殊 Gradle 配置请手动检查。"
+            fi
+          else
+            echo "✅ android/gradlew 已存在。"
+          fi
+
+      # 给 Gradle Wrapper 添加执行权限
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
 
       - name: Install dependencies
         run: |
@@ -46,23 +69,16 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
-      # 给 Gradle Wrapper 添加执行权限，避免 exit 127
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew
-
       - name: Build APK via Gradle
         id: build
         run: |
-          # 进入 android 目录，执行 Gradle 构建
           cd android
           ./gradlew assembleRelease --stacktrace > ../build.log 2>&1
           EXIT_CODE=$?
           cd ..
 
-          # 查找 APK 文件
           APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
 
-          # 生成摘要
           echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
