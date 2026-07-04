@@ -13,11 +13,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # 改用指定具体版本，避免无法解析 'stable'
+      # 设置 Java 17（Flutter 3.27 需要）
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 指定具体 Flutter 版本，避免 'stable' 解析失败
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.0'  # 显式指定与 Gradle 8.x 兼容的最新稳定版
+          flutter-version: '3.27.0'   # 明确版本号
 
       - name: Print environment info
         run: |
@@ -27,7 +34,7 @@ jobs:
           echo "|------|------|" >> $GITHUB_STEP_SUMMARY
           echo "| Java | $(java -version 2>&1 | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Gradle (wrapper) | $(./android/gradlew --version 2>/dev/null | grep Gradle | head -n1 || echo '未找到') |" >> $GITHUB_STEP_SUMMARY
+          echo "| Gradle Wrapper | $(./android/gradlew --version 2>/dev/null | grep Gradle | head -n1 || echo '未找到') |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
       - name: Clean project
@@ -39,16 +46,23 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
+      # 给 Gradle Wrapper 添加执行权限，避免 exit 127
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
       - name: Build APK via Gradle
         id: build
         run: |
+          # 进入 android 目录，执行 Gradle 构建
           cd android
           ./gradlew assembleRelease --stacktrace > ../build.log 2>&1
           EXIT_CODE=$?
           cd ..
-          
+
+          # 查找 APK 文件
           APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
-          
+
+          # 生成摘要
           echo "## 📦 Flutter APK 构建摘要" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| 项目 | 值 |" >> $GITHUB_STEP_SUMMARY
@@ -58,7 +72,7 @@ jobs:
           echo "| 构建时间 | $(date '+%Y-%m-%d %H:%M:%S') |" >> $GITHUB_STEP_SUMMARY
           echo "| Flutter 版本 | $(flutter --version | head -n1) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [ $APK_FOUND -gt 0 ]; then
             echo "## ✅ 构建成功！生成的 APK 文件：" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
