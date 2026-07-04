@@ -41,7 +41,7 @@ jobs:
 
       - name: Write custom Gradle files (AGP 7.2.0, Gradle 7.5)
         run: |
-          # gradle-wrapper.properties
+          # 1. gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
@@ -50,7 +50,7 @@ jobs:
           zipStorePath=wrapper/dists
           EOF
 
-          # build.gradle
+          # 2. build.gradle
           cat > android/build.gradle <<'EOF'
           buildscript {
               ext.kotlin_version = '1.9.24'
@@ -81,7 +81,7 @@ jobs:
           }
           EOF
 
-          # settings.gradle
+          # 3. settings.gradle
           cat > android/settings.gradle <<'EOF'
           pluginManagement {
               def flutterSdkPath = {
@@ -107,7 +107,7 @@ jobs:
           include ":app"
           EOF
 
-          # app/build.gradle (compileSdk 34)
+          # 4. app/build.gradle（修复注释，使用 //，并升级 compileSdk 到 34）
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -131,7 +131,7 @@ jobs:
           }
           android {
               namespace "com.example.pho"
-              compileSdk 34   # 升级到 34 以满足插件要求
+              compileSdk 34   // 升级到 34 以满足插件要求
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_11
                   targetCompatibility JavaVersion.VERSION_11
@@ -146,7 +146,7 @@ jobs:
               defaultConfig {
                   applicationId "com.example.pho"
                   minSdkVersion 21
-                  targetSdkVersion 34
+                  targetSdkVersion 33
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
@@ -161,13 +161,10 @@ jobs:
           }
           EOF
 
-          echo "✅ 自定义 Gradle 文件已写入 (compileSdk 34)"
+          echo "✅ 自定义 Gradle 文件已写入（注释已修复，compileSdk=34）"
 
-      - name: Clear pub cache and install dependencies
-        run: |
-          # 清除缓存，确保使用最新的依赖解析
-          rm -rf ~/.pub-cache
-          flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
       - name: Build APK via Gradle
         id: build
