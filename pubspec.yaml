@@ -15,7 +15,7 @@ dependencies:
   toast: ^0.3.0
   grpc: ^3.1.0
 dependencies:
-  win32: 4.1.4   # 强制降级
+  win32: 4.1.4 
   # 原使用 SSH 的 Git 依赖，现改为 pub 官方版本
   photo_manager: ^2.6.0               # 原 git: git@github.com:fluttercandies/flutter_photo_manager.git
   photo_view: ^0.14.0                 # 原 git: git@github.com:bluefireteam/photo_view.git
