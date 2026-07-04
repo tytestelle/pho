@@ -45,6 +45,7 @@ dependencies:
 
 dependency_overrides:
   win32: ^5.0.0   # 强制使用 5.x，移除 UnmodifiableUint8ListView
+  flutter_plugin_android_lifecycle: ^2.0.19   # 强制升级以支持 Flutter 3.x
 
 dev_dependencies:
   flutter_test:
