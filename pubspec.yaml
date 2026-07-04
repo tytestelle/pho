@@ -45,7 +45,7 @@ dependencies:
 
 dependency_overrides:
   win32: ^5.0.0
-  flutter_plugin_android_lifecycle: 2.0.19   # 固定版本，兼容 Groovy DSL
+  flutter_plugin_android_lifecycle: 2.0.19
 
 dev_dependencies:
   flutter_test:
