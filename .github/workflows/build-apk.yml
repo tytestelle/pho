@@ -22,24 +22,9 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.0'
+          flutter-version: '3.29.0'   # 升级到最新稳定版
 
-      # ---------- 关键修复开始 ----------
-      - name: Fix source code and dependencies
-        run: |
-          # 1. 强制降级 win32 到兼容版本
-          echo "win32: 4.1.4" >> pubspec.yaml
-          
-          # 2. 修复 gallery_body.dart 中的 FileImage 类型错误
-          sed -i 's/FileImage(asset.local as File)/FileImage(asset.local!)/g' lib/gallery_body.dart
-          
-          # 3. 重新获取依赖，更新 pubspec.lock
-          flutter pub get
-          
-          echo "✅ 源码和依赖已修复"
-      # ---------- 修复结束 ----------
-
-      - name: Clean and backup (备用)
+      - name: Clean and backup
         run: |
           if [ -d "lib" ]; then cp -r lib lib_backup; fi
           if [ -d "assets" ]; then cp -r assets assets_backup; fi
@@ -54,13 +39,13 @@ jobs:
           if [ -f "pubspec.yaml.backup" ]; then mv pubspec.yaml.backup pubspec.yaml; fi
           chmod +x android/gradlew
 
-      - name: Write custom Gradle files
+      - name: Write Gradle files (AGP 8.1.0, Kotlin 1.9.24, Gradle 8.4)
         run: |
           # gradle-wrapper.properties
           cat > android/gradle/wrapper/gradle-wrapper.properties <<'EOF'
           distributionBase=GRADLE_USER_HOME
           distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-7.5-all.zip
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-all.zip
           zipStoreBase=GRADLE_USER_HOME
           zipStorePath=wrapper/dists
           EOF
@@ -74,7 +59,7 @@ jobs:
                   mavenCentral()
               }
               dependencies {
-                  classpath 'com.android.tools.build:gradle:7.2.0'
+                  classpath 'com.android.tools.build:gradle:8.1.0'
                   classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
               }
           }
@@ -116,13 +101,13 @@ jobs:
           }
           plugins {
               id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-              id "com.android.application" version "7.2.0" apply false
+              id "com.android.application" version "8.1.0" apply false
               id "org.jetbrains.kotlin.android" version "1.9.24" apply false
           }
           include ":app"
           EOF
 
-          # app/build.gradle (修复注释，使用 //)
+          # app/build.gradle
           cat > android/app/build.gradle <<'EOF'
           plugins {
               id "com.android.application"
@@ -146,14 +131,14 @@ jobs:
           }
           android {
               namespace "com.example.pho"
-              compileSdk 34   // 满足插件要求
+              compileSdk 34
               compileOptions {
-                  sourceCompatibility JavaVersion.VERSION_11
-                  targetCompatibility JavaVersion.VERSION_11
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
               }
               kotlinOptions {
                   languageVersion = '1.8'
-                  jvmTarget = '11'
+                  jvmTarget = '17'
               }
               sourceSets {
                   main.java.srcDirs += 'src/main/kotlin'
@@ -161,7 +146,7 @@ jobs:
               defaultConfig {
                   applicationId "com.example.pho"
                   minSdkVersion 21
-                  targetSdkVersion 33
+                  targetSdkVersion 34
                   versionCode flutterVersionCode.toInteger()
                   versionName flutterVersionName
               }
@@ -176,9 +161,9 @@ jobs:
           }
           EOF
 
-          echo "✅ Gradle 文件写入完成"
+          echo "✅ Gradle 文件已更新 (AGP 8.1.0, Kotlin 1.9.24, Gradle 8.4)"
 
-      - name: Install dependencies again (with fixes)
+      - name: Install dependencies
         run: flutter pub get
 
       - name: Build APK via Gradle
