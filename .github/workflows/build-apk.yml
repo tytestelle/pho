@@ -50,7 +50,7 @@ jobs:
           EOF
 
           cat > android/gradle.properties <<'EOF'
-          android.suppressUnsupportedCompileSdk=34
+          android.suppressUnsupportedCompileSdk=34,33
           EOF
 
           cat > android/build.gradle <<'EOF'
@@ -166,12 +166,24 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK via Gradle
+      - name: Build APK via Gradle (full output)
         id: build
         run: |
           cd android
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew assembleRelease --stacktrace --warning-mode all 2>&1 | tee ../build.log
+          EXIT_CODE=$?
           cd ..
+          echo "EXIT_CODE=$EXIT_CODE" >> $GITHUB_OUTPUT
+          echo "构建退出码: $EXIT_CODE"
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "## ❌ 构建失败 (退出码: $EXIT_CODE)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 完整构建日志 (最后 200 行)：" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -200 build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            exit $EXIT_CODE
+          fi
 
       - name: Copy APK
         if: success()
@@ -204,6 +216,13 @@ jobs:
           else
             echo "## ❌ 构建失败" >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: build-log
+          path: build.log
 
       - name: Upload APKs
         if: steps.build.outputs.apk_found == 'true'
