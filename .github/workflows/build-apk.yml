@@ -13,6 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # 1. 关键修复：使用最新稳定版 Flutter，避免版本不兼容问题
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -27,17 +28,18 @@ jobs:
             flutter pub get && break || sleep 5
           done
 
-      - name: Build APK and capture all output
+      - name: Build APK with full logging
         id: build
         run: |
-          # 使用 stdbuf 强制禁用输出缓冲，确保所有日志都被捕获
-          # 将 stdout 和 stderr 都重定向到 build.log
-          stdbuf -oL -eL flutter build apk --release --split-per-abi -v > build.log 2>&1
+          # 2. 使用 stdbuf 强制禁用输出缓冲，确保所有日志都被捕获
+          #    同时使用 script 命令创建伪终端，捕获崩溃前的输出
+          #    将 stdout 和 stderr 都重定向到 build.log
+          stdbuf -oL -eL script -q -c "flutter build apk --release --split-per-abi -v" build.log 2>&1
           
           # 保存命令的退出码
           EXIT_CODE=$?
           
-          # 使用 find 命令查找生成的 APK，判断构建是否真正成功
+          # 3. 使用 find 命令查找生成的 APK，判断构建是否真正成功
           APK_FOUND=$(find build/app/outputs/apk/release -name "*.apk" 2>/dev/null | wc -l)
           
           # 生成摘要
@@ -61,7 +63,12 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### 完整构建日志：" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
-            cat build.log >> $GITHUB_STEP_SUMMARY
+            # 4. 如果文件存在则显示内容，否则显示提示信息
+            if [ -f build.log ]; then
+              cat build.log >> $GITHUB_STEP_SUMMARY
+            else
+              echo "build.log 文件未生成，请检查构建环境。" >> $GITHUB_STEP_SUMMARY
+            fi
             echo '```' >> $GITHUB_STEP_SUMMARY
             exit $EXIT_CODE
           fi
@@ -73,10 +80,25 @@ jobs:
           name: pho-apk
           path: build/app/outputs/apk/release/*.apk
 
+      # 5. 增强的文件存在性检查：先查找文件，再决定是否上传
       - name: Upload build log
         if: always()
+        run: |
+          # 查找 build.log 文件
+          LOG_FILE=$(find . -name "build.log" -type f)
+          if [ -n "$LOG_FILE" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "log_path=$LOG_FILE" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "build.log 文件未找到，跳过上传。" >> $GITHUB_STEP_SUMMARY
+          fi
+        id: check_log
+
+      - name: Upload build log (if exists)
+        if: always() && steps.check_log.outputs.found == 'true'
         uses: actions/upload-artifact@v5
         with:
           name: build-log
-          path: build.log
+          path: ${{ steps.check_log.outputs.log_path }}
           if-no-files-found: warn
