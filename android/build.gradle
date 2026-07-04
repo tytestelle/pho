@@ -1,5 +1,5 @@
 buildscript {
-    ext.kotlin_version = '1.8.0'
+    ext.kotlin_version = '1.7.10'
     repositories {
         google()
         mavenCentral()
@@ -15,9 +15,6 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        flatDir {
-            dirs 'libs' // 添加这一行，表示在libs目录下寻找.aar文件
-        }
     }
 }
 
@@ -29,6 +26,6 @@ subprojects {
     project.evaluationDependsOn(':app')
 }
 
-tasks.register("clean", Delete) {
+tasks.register('clean', Delete) {
     delete rootProject.buildDir
 }
