@@ -16,7 +16,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
+          flutter-version: 'stable'   # 使用最新稳定版（>=3.27）
 
       - name: Clean project
         run: flutter clean
