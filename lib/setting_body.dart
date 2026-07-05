@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:img_syncer/choose_album_route.dart';
-import 'package:img_syncer/setting_storage_route.dart';
+import 'package:phodav/choose_album_route.dart';
+import 'package:phodav/setting_storage_route.dart';
 
 class SettingBody extends StatelessWidget {
   const SettingBody({Key? key}) : super(key: key);

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:img_syncer/storageform/smbform.dart';
-import 'package:img_syncer/storageform/webdavform.dart';
-import 'package:img_syncer/storageform/nfsform.dart';
-import 'package:img_syncer/storageform/baidu_netdisk.dart';
+import 'package:phodav/storageform/smbform.dart';
+import 'package:phodav/storageform/webdavform.dart';
+import 'package:phodav/storageform/nfsform.dart';
+import 'package:phodav/storageform/baidu_netdisk.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:img_syncer/state_model.dart';
-import 'package:img_syncer/global.dart';
+import 'package:phodav/state_model.dart';
+import 'package:phodav/global.dart';
 
 class SettingStorageRoute extends StatefulWidget {
   const SettingStorageRoute({Key? key}) : super(key: key);

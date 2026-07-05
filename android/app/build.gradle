@@ -23,8 +23,8 @@ if (flutterVersionName == null) {
 }
 
 android {
-    namespace "com.example.pho"
-    compileSdk 33
+    namespace "com.phodav.app"
+    compileSdk 34
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
@@ -41,7 +41,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.pho"
+        applicationId "com.phodav.app"
         minSdkVersion 21
         targetSdkVersion 33
         versionCode flutterVersionCode.toInteger()
@@ -53,6 +53,16 @@ android {
             signingConfig signingConfigs.debug
         }
     }
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.exifinterface:exifinterface:1.3.6'
+    }
+}
+
+dependencies {
+    implementation 'androidx.exifinterface:exifinterface:1.3.6'
 }
 
 flutter {

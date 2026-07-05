@@ -8,10 +8,10 @@ Future<String> runServer() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   if (Platform.isAndroid) {
-    ports = await const MethodChannel('com.example.img_syncer/RunGrpcServer')
+    ports = await const MethodChannel('phodav/RunGrpcServer')
         .invokeMethod('RunGrpcServer');
   } else if (Platform.isIOS) {
-    ports = await const MethodChannel('com.example.img_syncer/RunGrpcServer')
+    ports = await const MethodChannel('phodav/RunGrpcServer')
         .invokeMethod('RunGrpcServer');
   }
 

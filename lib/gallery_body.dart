@@ -2,11 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'asset.dart';
-import 'state_model.dart';
 
 class GalleryBody extends StatefulWidget {
-  final bool useLocal; // true=本地，false=云端
-  final String mode;   // 'photo' 或 'file'
+  final bool useLocal;
+  final String mode;
 
   const GalleryBody({Key? key, required this.useLocal, this.mode = 'photo'})
       : super(key: key);
@@ -44,35 +43,65 @@ class _GalleryBodyState extends State<GalleryBody> {
     final model = context.watch<AssetModel>();
     final assets = widget.useLocal ? model.localAssets : model.remoteAssets;
 
-    return Scaffold(
-      body: assets.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 4,
-                mainAxisSpacing: 4,
-                childAspectRatio: 1,
+    if (model.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (assets.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                widget.useLocal ? Icons.photo_library_outlined : Icons.cloud_off_outlined,
+                size: 64,
+                color: Colors.grey,
               ),
-              itemCount: assets.length,
-              itemBuilder: (ctx, index) {
-                final asset = assets[index];
-                return _buildItem(asset);
-              },
-            ),
+              const SizedBox(height: 16),
+              Text(
+                widget.useLocal
+                    ? '本机暂无可显示的媒体内容。'
+                    : '云端内容暂未配置。',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16),
+              ),
+              if (model.errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  model.errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(4),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 4,
+        mainAxisSpacing: 4,
+        childAspectRatio: 1,
+      ),
+      itemCount: assets.length,
+      itemBuilder: (ctx, index) {
+        final asset = assets[index];
+        return _buildItem(asset);
+      },
     );
   }
 
   Widget _buildItem(Asset asset) {
     if (widget.mode == 'photo') {
-      // 照片模式：显示图片或视频缩略图
-      ImageProvider imageProvider;
-      if (asset.local != null) {
-        // 明确将 asset.local 作为 File 传入
-        imageProvider = FileImage(asset.local!);
-      } else {
-        imageProvider = NetworkImage(asset.remote!);
-      }
+      final ImageProvider imageProvider = asset.local != null
+          ? FileImage(asset.local!) as ImageProvider
+          : NetworkImage(asset.remote!);
       return Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -81,33 +110,32 @@ class _GalleryBodyState extends State<GalleryBody> {
           ),
         ),
       );
-    } else {
-      // 文件模式：显示文件图标 + 文件名
-      return Container(
-        color: Colors.grey[200],
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _getFileIcon(asset.fileExtension),
-              size: 48,
-              color: Colors.blue,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              asset.displayName(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12),
-            ),
-            Text(
-              asset.sizeString,
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-          ],
-        ),
-      );
     }
+
+    return Container(
+      color: Colors.grey[200],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            _getFileIcon(asset.fileExtension),
+            size: 48,
+            color: Colors.blue,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            asset.displayName(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12),
+          ),
+          Text(
+            asset.sizeString,
+            style: const TextStyle(fontSize: 10, color: Colors.grey),
+          ),
+        ],
+      ),
+    );
   }
 
   IconData _getFileIcon(String? ext) {

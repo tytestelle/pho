@@ -1,13 +1,13 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:img_syncer/state_model.dart';
+import 'package:phodav/state_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:img_syncer/storage/storage.dart';
-import 'package:img_syncer/event_bus.dart';
+import 'package:phodav/storage/storage.dart';
+import 'package:phodav/event_bus.dart';
 import 'package:path/path.dart';
-import 'package:img_syncer/global.dart';
+import 'package:phodav/global.dart';
 
 Timer? autoSyncTimer;
 

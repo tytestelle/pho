@@ -1,12 +1,12 @@
 buildscript {
-    ext.kotlin_version = '1.9.24'
+    ext.kotlin_version = '1.8.20'
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.2.0'
+        classpath 'com.android.tools.build:gradle:7.4.2'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
@@ -18,12 +18,12 @@ allprojects {
     }
 }
 
-// 强制子项目使用 Kotlin 1.8 语言版本和 JVM 11
+// 仅为应用模块补齐与 Flutter 3.19/Java 17 兼容的 Kotlin 配置
 subprojects {
     afterEvaluate { project ->
-        if (project.hasProperty('android')) {
+        if (project.plugins.hasPlugin('com.android.application')) {
             project.android {
-                compileSdk 33
+                compileSdk 34
                 compileOptions {
                     sourceCompatibility JavaVersion.VERSION_11
                     targetCompatibility JavaVersion.VERSION_11

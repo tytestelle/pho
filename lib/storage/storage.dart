@@ -1,16 +1,16 @@
 import 'dart:typed_data';
 import 'package:grpc/grpc.dart';
-import 'package:img_syncer/proto/img_syncer.pbgrpc.dart';
+import 'package:phodav/proto/img_syncer.pbgrpc.dart';
 import 'package:date_format/date_format.dart';
-import 'package:img_syncer/state_model.dart';
+import 'package:phodav/state_model.dart';
 import 'package:path/path.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:img_syncer/global.dart';
+import 'package:phodav/global.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/services.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:img_syncer/util.dart';
+import 'package:phodav/util.dart';
 
 RemoteStorage storage = RemoteStorage("127.0.0.1", 10000);
 

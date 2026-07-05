@@ -1,4 +1,4 @@
-package com.example.img_syncer
+package phodav
 
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
@@ -17,7 +17,7 @@ import java.io.File
 
 
 class MainActivity : FlutterActivity() {
-  private val CHANNEL = "com.example.img_syncer/RunGrpcServer"
+  private val CHANNEL = "phodav/RunGrpcServer"
 
   override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)

@@ -1,15 +1,15 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import 'package:img_syncer/asset.dart';
-import 'package:img_syncer/state_model.dart';
+import 'package:phodav/asset.dart';
+import 'package:phodav/state_model.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:img_syncer/storage/storage.dart';
+import 'package:phodav/storage/storage.dart';
 import 'event_bus.dart';
 import 'package:extended_image/extended_image.dart';
-import 'package:img_syncer/video_route.dart';
-import 'package:img_syncer/global.dart';
+import 'package:phodav/video_route.dart';
+import 'package:phodav/global.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:gallery_saver/gallery_saver.dart';
 

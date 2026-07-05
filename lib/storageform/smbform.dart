@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:img_syncer/event_bus.dart';
-import 'package:img_syncer/proto/img_syncer.pbgrpc.dart';
-import 'package:img_syncer/state_model.dart';
-import 'package:img_syncer/storage/storage.dart';
+import 'package:phodav/event_bus.dart';
+import 'package:phodav/proto/img_syncer.pbgrpc.dart';
+import 'package:phodav/state_model.dart';
+import 'package:phodav/storage/storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:img_syncer/global.dart';
+import 'package:phodav/global.dart';
 
 class SMBForm extends StatefulWidget {
   const SMBForm({Key? key}) : super(key: key);
